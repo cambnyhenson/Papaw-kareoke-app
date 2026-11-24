@@ -2,8 +2,13 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
-  scan: dir => ipcRenderer.invoke('scan', dir),
-  read: rel => ipcRenderer.invoke('read', rel),     // -> Uint8Array
+  libGet: () => ipcRenderer.invoke('lib-get'),
+  libStatus: () => ipcRenderer.invoke('lib-status'),
+  libAdd: dir => ipcRenderer.invoke('lib-add', dir),
+  libRemove: id => ipcRenderer.invoke('lib-remove', id),
+  libScan: id => ipcRenderer.invoke('lib-scan', id),
+  onScanProgress: cb => ipcRenderer.on('scan-progress', (_e, name, n) => cb(name, n)),
+  read: key => ipcRenderer.invoke('read', key),     // -> Uint8Array
   hasTV: () => ipcRenderer.invoke('has-tv'),
   version: () => ipcRenderer.invoke('version'),
   recSave: (title, bytes) => ipcRenderer.invoke('rec-save', title, bytes),

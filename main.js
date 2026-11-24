@@ -3,9 +3,7 @@ const { app, BrowserWindow, ipcMain, dialog, screen, session, shell } = require(
 const path = require('path');
 const fs = require('fs/promises');
 
-const MEDIA_EXT = new Set(['zip', 'cdg', 'mp3', 'm4a', 'wav', 'ogg', 'flac', 'mp4', 'm4v', 'webm', 'mkv', 'mov']);
 let win = null;
-let root = null; // the song folder currently loaded
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -55,41 +53,26 @@ function createWindow() {
   win.on('closed', () => { win = null; app.quit(); });
 }
 
-/* ---------- file access for the page ---------- */
-async function walk(dir, rel, out) {
-  let entries;
-  try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; } // skip unreadable folders
-  for (const e of entries) {
-    if (e.name.startsWith('.') || e.name === '__MACOSX') continue;
-    const r = rel ? rel + '/' + e.name : e.name;
-    if (e.isDirectory()) await walk(path.join(dir, e.name), r, out);
-    else if (e.isFile()) {
-      const ext = path.extname(e.name).slice(1).toLowerCase();
-      if (MEDIA_EXT.has(ext)) out.push(r);
-    }
-  }
-}
+/* ---------- song library ---------- */
+const library = require('./library');
 
 ipcMain.handle('pick-folder', async () => {
-  const res = await dialog.showOpenDialog(win, { title: 'Choose the karaoke song folder', properties: ['openDirectory'] });
+  const res = await dialog.showOpenDialog(win, { title: 'Choose a folder (or drive) with karaoke songs', properties: ['openDirectory'] });
   return res.canceled ? null : res.filePaths[0];
 });
-
-ipcMain.handle('scan', async (_e, dir) => {
-  const st = await fs.stat(dir); // throws if the drive/folder is missing
-  if (!st.isDirectory()) throw new Error('Not a folder');
-  root = path.resolve(dir);
-  const out = [];
-  await walk(root, '', out);
-  return out;
+ipcMain.handle('lib-get', () => library.get());
+ipcMain.handle('lib-status', () => library.status());
+ipcMain.handle('lib-add', (_e, dir) => library.add(dir));
+ipcMain.handle('lib-remove', (_e, id) => library.remove(id));
+let scanning = null;
+ipcMain.handle('lib-scan', (e, id) => {
+  if (!scanning) {
+    scanning = library.scan(id, (name, n) => { if (!e.sender.isDestroyed()) e.sender.send('scan-progress', name, n); })
+      .finally(() => { scanning = null; });
+  }
+  return scanning;
 });
-
-ipcMain.handle('read', async (_e, rel) => {
-  if (!root) throw new Error('No song folder loaded');
-  const full = path.resolve(root, rel);
-  if (full !== root && !full.startsWith(root + path.sep)) throw new Error('Outside song folder');
-  return await fs.readFile(full);
-});
+ipcMain.handle('read', async (_e, key) => fs.readFile(await library.fullPath(key)));
 
 /* ---------- recordings (Documents\Karaoke Recordings) ---------- */
 const recDir = () => path.join(app.getPath('documents'), 'Karaoke Recordings');

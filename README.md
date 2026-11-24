@@ -2,6 +2,10 @@
 
 A simple Windows karaoke show player built for one person: Grandpa.
 
+- **Big libraries**: add one or more song folders or whole drives. Songs are read in place
+  (nothing copied). The index is saved, so it opens instantly and picks up new songs in the
+  background. Drives are matched by volume serial number, so a changed drive letter doesn't matter.
+  Disc codes like `SC8123-05` are split out and songs are listed by Artist / Title.
 - Plays **MP3+G zips**, matching **.mp3 + .cdg** files, and **MP4** karaoke videos
 - **Lyrics on the TV**: opens full screen on the second display automatically
 - **Key change** (±6 semitones) without changing the speed, remembered per song
@@ -17,7 +21,8 @@ A simple Windows karaoke show player built for one person: Grandpa.
 1. Run `Karaoke-Player-Setup-x.y.z.exe` (or the portable `.exe`, which needs no install).
    Windows may show "Windows protected your PC" because the app isn't code-signed:
    click **More info → Run anyway**.
-2. **Choose Song Folder**: it's remembered and rescanned every time the app opens.
+2. **📁 Song Folders → + Add Folder**: pick the karaoke drive. The first read of a big drive
+   takes a few minutes; after that it's instant.
 3. **Sound to:** pick the mixer.
 4. Plug in the TV before starting. The TV screen opens on it full screen.
    **📺 TV Screen** reopens it; double-click it to switch full screen on or off.

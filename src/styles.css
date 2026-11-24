@@ -73,3 +73,17 @@
   .nprow{display:flex;align-items:center;gap:12px;min-width:0}
   .recinfo{color:var(--bad);font-weight:700;white-space:nowrap}
   .row .meta{color:var(--dim);font-size:12px}
+  .offline{color:var(--accent);font-size:14px}
+  .searchbar{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:13px;margin-top:6px}
+  .searchbar .count{margin:0}
+  .searchbar .sp{flex:1}
+  button.sort{padding:2px 10px;font-size:13px;background:none}
+  button.sort.active{background:var(--panel2);border-color:var(--accent);color:var(--text)}
+  .row .t{font-weight:600}
+  .tag.code{background:#1e2630;font-family:Consolas,monospace}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:7}
+  .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(720px,92vw);max-height:85vh;display:flex;flex-direction:column;padding:16px 18px;gap:10px}
+  .modal h3{margin:0;font-size:20px}
+  .mhelp{margin:0;color:var(--dim);font-size:14px}
+  .modal .list{border:1px solid var(--line);border-radius:8px;min-height:80px;max-height:40vh}
+  .mrow{display:flex;align-items:center;gap:10px;color:var(--dim)}

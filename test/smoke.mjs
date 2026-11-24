@@ -5,8 +5,10 @@ const app = await electron.launch({ executablePath: (await import('electron')).d
 const pg = await app.firstWindow();
 const errs=[]; pg.on('pageerror',e=>errs.push(e.message)); pg.on('console',m=>{ if(m.type()==='error') errs.push(m.text()); });
 await pg.waitForLoadState('domcontentloaded');
-await pg.evaluate(()=>localStorage.clear());
-await pg.evaluate(l=>__kp.loadFolder(l), lib);
+for (const f of await pg.evaluate(()=>window.api.libGet().then(r=>r.folders.map(f=>f.id)))) await pg.evaluate(id=>window.api.libRemove(id), f);
+await pg.evaluate(()=>localStorage.clear()); await pg.reload(); await pg.waitForLoadState('domcontentloaded'); await pg.waitForTimeout(800);
+await pg.click('#btnCloseFolders');
+const fid = await pg.evaluate(l=>window.api.libAdd(l), lib); await pg.evaluate(id=>__kp.rescan(id,true), fid);
 console.log('status:', await pg.textContent('#status'));
 for (const b of await pg.$$('#results .row button')) await b.click();
 const names = await pg.$$eval('#playlist .row .name div', e=>e.map(x=>x.textContent));

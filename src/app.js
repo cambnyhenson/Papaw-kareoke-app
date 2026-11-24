@@ -155,47 +155,127 @@ async function readZip(bytes){
   return { find, extract };
 }
 
-/* ================= LIBRARY ================= */
+/* ================= LIBRARY =================
+   The app keeps a saved index of every song folder (in the main process), so it opens
+   instantly, then rescans connected folders in the background. Songs stay where they are. */
 const AUDIO=['mp3','m4a','wav','ogg','flac'], VIDEO=['mp4','m4v','webm','mkv','mov'];
-let library=new Map();   // path -> song
+let library=new Map();   // key ("folderId|relative/path") -> song
 let libList=[];
+let folders=[];          // [{id,name,label,path,online,count}]
+let rawFiles={};         // folderId -> [relative paths]
 const ext = n => { const i=n.lastIndexOf('.'); return i<0?'':n.slice(i+1).toLowerCase(); };
 const stripExt = n => { const i=n.lastIndexOf('.'); return i<0?n:n.slice(0,i); };
-const readFile = rel => window.api.read(rel);
+const readFile = key => window.api.read(key);
+let nameOrder = localStorage.getItem('kp.nameOrder') || 'at';   // 'at' = Artist - Title, 'ta' = Title - Artist
+let sortBy = localStorage.getItem('kp.sort') || 'artist';
 
-function buildLibrary(paths){
-  const groups=new Map();
-  for(const path of paths){
-    const e=ext(path), base=stripExt(path).toLowerCase();
-    let g=groups.get(base); if(!g){ g={}; groups.set(base,g); }
-    if(e==='zip') g.zip=path; else if(e==='cdg') g.cdg=path; else if(AUDIO.includes(e)) g.audio=path; else if(VIDEO.includes(e)) g.video=path;
-  }
+/* "SC8123-05 - Patsy Cline - Crazy" -> {code:'SC8123-05', artist:'Patsy Cline', title:'Crazy'} */
+const CODE_RE=/^[\[(]?([a-z]{1,8}[- ]?\d{2,}[a-z0-9]*(?:[-_. ]\d{1,3}[a-z]?)?)[\])]?\s*(?:[-_.]\s*)?/i;
+function parseName(base){
+  let s=base.replace(/_/g,' ').replace(/\s+/g,' ').trim(), code='';
+  const m=s.match(CODE_RE);
+  // only treat the start as a disc code if "Artist - Title" is still left after it (so "Matchbox 20 - Push" stays intact)
+  if(m){ const rest=s.slice(m[0].length).trim(); if(rest.includes(' - ')){ code=m[1]; s=rest; } }
+  const parts=s.split(/\s+-\s+/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length<2) return {code, artist:'', title:s};
+  return nameOrder==='ta' ? {code, title:parts[0], artist:parts.slice(1).join(' - ')}
+                          : {code, artist:parts[0], title:parts.slice(1).join(' - ')};
+}
+const displayName = s => s.artist ? s.artist+' - '+s.title : s.title;
+
+function buildLibrary(){
   library=new Map();
-  const add=(path,type,parts)=>{ const name=stripExt(path.split('/').pop()); const folder=path.split('/').slice(0,-1).join('/');
-    library.set(path,{path,name,folder,type,...parts,search:path.toLowerCase()}); };
-  for(const g of groups.values()){
-    if(g.zip) add(g.zip,'zip',{zip:g.zip});
-    if(g.audio && g.cdg) add(g.audio,'mp3g',{audio:g.audio,cdg:g.cdg});
-    else if(g.audio && !g.zip) add(g.audio,'audio',{audio:g.audio});
-    if(g.video) add(g.video,'video',{video:g.video});
+  for(const f of folders){
+    const groups=new Map();
+    for(const rel of rawFiles[f.id]||[]){
+      const e=ext(rel), base=stripExt(rel).toLowerCase(), key=f.id+'|'+rel;
+      let g=groups.get(base); if(!g){ g={}; groups.set(base,g); }
+      if(e==='zip') g.zip=key; else if(e==='cdg') g.cdg=key; else if(AUDIO.includes(e)) g.audio=key; else if(VIDEO.includes(e)) g.video=key;
+    }
+    const add=(key,type,parts)=>{
+      const rel=key.slice(key.indexOf('|')+1), file=stripExt(rel.split('/').pop());
+      const p=parseName(file), folder=f.name+(rel.includes('/')?' › '+rel.split('/').slice(0,-1).join(' › '):'');
+      library.set(key,{path:key,type,...parts,...p,name:displayName(p),folder,online:f.online,
+        search:(p.artist+' '+p.title+' '+p.code+' '+rel).toLowerCase()});
+    };
+    for(const g of groups.values()){
+      if(g.zip) add(g.zip,'zip',{zip:g.zip});
+      if(g.audio && g.cdg) add(g.audio,'mp3g',{audio:g.audio,cdg:g.cdg});
+      else if(g.audio && !g.zip) add(g.audio,'audio',{audio:g.audio});
+      if(g.video) add(g.video,'video',{video:g.video});
+    }
   }
-  libList=[...library.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
-  $('status').textContent = libList.length.toLocaleString()+' songs loaded';
-  doSearch(); renderPlaylist();
+  sortLibrary();
+  updateLibStatus(); doSearch(); renderPlaylist();
 }
+function sortLibrary(){
+  const c=(a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true});
+  libList=[...library.values()].sort(sortBy==='title'
+    ? (a,b)=>c(a.title,b.title)||c(a.artist,b.artist)
+    : (a,b)=>c(a.artist||'￿',b.artist||'￿')||c(a.title,b.title));
+  $('sortArtist').classList.toggle('active',sortBy==='artist'); $('sortTitle').classList.toggle('active',sortBy==='title');
+}
+$('sortArtist').onclick=()=>{ sortBy='artist'; localStorage.setItem('kp.sort',sortBy); sortLibrary(); doSearch(); };
+$('sortTitle').onclick=()=>{ sortBy='title'; localStorage.setItem('kp.sort',sortBy); sortLibrary(); doSearch(); };
 
-async function loadFolder(dir){
-  busy(true,'Scanning songs…');
-  try{
-    const paths=await window.api.scan(dir);
-    localStorage.setItem('kp.root', dir);
-    $('folderName').textContent=dir; $('folderName').title=dir;
-    buildLibrary(paths);
-    if(!paths.length) toast('No karaoke songs found in that folder.');
-  }catch(e){ toast('Could not open the song folder "'+dir+'". Is the drive plugged in? Click Choose Song Folder to pick it again.', 8000); }
-  busy(false);
+let scanNote='';
+function updateLibStatus(){
+  const off=folders.filter(f=>!f.online);
+  let t=libList.length.toLocaleString()+' songs';
+  if(scanNote) t+=' · '+scanNote;
+  $('status').textContent=t;
+  $('offline').style.display=off.length?'':'none';
+  $('offline').textContent=off.length ? '⚠ Not plugged in: '+off.map(f=>f.label||f.name).join(', ') : '';
 }
-$('btnFolder').onclick = async ()=>{ const dir=await window.api.pickFolder(); if(dir) await loadFolder(dir); };
+window.api.onScanProgress((name,n)=>{ scanNote='checking '+name+'… '+n.toLocaleString()+' files'; updateLibStatus(); });
+
+async function loadIndex(){
+  const r=await window.api.libGet(); folders=r.folders; rawFiles=r.files; buildLibrary(); renderFolders();
+}
+async function rescan(id, quietIfNoChange){
+  scanNote='checking for new songs…'; updateLibStatus();
+  try{
+    const before=libList.length, {added,removed}=await window.api.libScan(id);
+    await loadIndex();
+    const diff=libList.length-before;
+    if(added||removed) toast(diff>0 ? 'Library updated: '+diff.toLocaleString()+' new songs' : diff<0 ? 'Library updated: '+(-diff).toLocaleString()+' songs no longer found' : 'Library updated',5000);
+    else if(!quietIfNoChange) toast('Library is up to date',2500);
+  }catch(e){ toast('Scan problem: '+e.message,6000); }
+  scanNote=''; updateLibStatus();
+}
+// when a song drive gets plugged in later, notice it and bring its songs back
+setInterval(async()=>{
+  if(!folders.some(f=>!f.online)) return;
+  const st=await window.api.libStatus();
+  const back=st.filter(f=>f.online && !folders.find(x=>x.id===f.id&&x.online));
+  if(back.length){ folders=st; toast('Song drive connected: '+back.map(f=>f.label||f.name).join(', '),4000); buildLibrary(); renderFolders(); rescan(null,true); }
+}, 15000);
+
+/* Song Folders window */
+function renderFolders(){
+  const box=$('folderList'); box.innerHTML='';
+  if(!folders.length){ box.innerHTML='<div class="empty">No song folders yet. Click “+ Add Folder” and pick the karaoke drive (or a folder on it).</div>'; return; }
+  for(const f of folders){
+    const r=document.createElement('div'); r.className='row';
+    r.innerHTML=`<span title="${f.online?'Connected':'Not plugged in'}">${f.online?'🟢':'⚪'}</span><div class="name"><div></div><div class="meta"></div></div><button>Remove</button>`;
+    r.querySelector('.name div').textContent=f.name+(f.label&&f.label!==f.name?'  ('+f.label+')':'');
+    r.querySelector('.meta').textContent=(f.online?f.path:'Not plugged in — last seen at '+f.path)+' · '+f.count.toLocaleString()+' files';
+    r.querySelector('button').onclick=async()=>{ if(!confirm('Remove "'+f.name+'" from the library? (The song files are not deleted.)')) return;
+      await window.api.libRemove(f.id); await loadIndex(); };
+    box.appendChild(r);
+  }
+}
+$('btnFolder').onclick=()=>{ renderFolders(); $('nameOrder').value=nameOrder; $('foldersModal').style.display='flex'; };
+$('btnCloseFolders').onclick=()=>{ $('foldersModal').style.display='none'; };
+$('btnAddFolder').onclick=async()=>{
+  const dir=await window.api.pickFolder(); if(!dir) return;
+  const id=await window.api.libAdd(dir);
+  if(!id){ toast('That folder is already in the library.'); return; }
+  await loadIndex(); busy(true,'Reading songs… this can take a few minutes the first time on a big drive');
+  await rescan(id,true); busy(false);
+};
+$('btnRescan').onclick=()=>rescan(null,false);
+$('nameOrder').onchange=e=>{ nameOrder=e.target.value; localStorage.setItem('kp.nameOrder',nameOrder); buildLibrary(); };
 
 /* ================= SEARCH ================= */
 const typeLabel={zip:'MP3+G',mp3g:'MP3+G',video:'Video',audio:'Audio only'};
@@ -208,15 +288,17 @@ function doSearch(){
   const box=$('results'); box.innerHTML='';
   if(!res.length){ box.innerHTML='<div class="empty">No songs match that search</div>'; return; }
   for(const s of res){
-    const r=document.createElement('div'); r.className='row';
-    r.innerHTML=`<div class="name"><div></div><div class="folder"></div></div><span class="tag">${typeLabel[s.type]}</span><button>Add</button>`;
-    r.querySelector('.name div').textContent=s.name; r.querySelector('.folder').textContent=s.folder;
+    const r=document.createElement('div'); r.className='row'+(s.online?'':' missing');
+    r.innerHTML=`<div class="name"><div class="t"></div><div class="folder"></div></div>${s.code?'<span class="tag code"></span>':''}<span class="tag">${typeLabel[s.type]}</span><button>Add</button>`;
+    r.querySelector('.t').textContent=s.title;
+    r.querySelector('.folder').textContent=(s.artist||'')+(s.artist?'  ·  ':'')+s.folder;
+    if(s.code) r.querySelector('.code').textContent=s.code;
     r.querySelector('button').onclick=()=>addToPlaylist(s);
     r.ondblclick=()=>addToPlaylist(s);
     box.appendChild(r);
   }
 }
-let st; $('q').oninput=()=>{ clearTimeout(st); st=setTimeout(doSearch,120); };
+let st; $('q').oninput=()=>{ clearTimeout(st); st=setTimeout(doSearch,150); };
 
 /* ================= PLAYLIST (saved automatically) ================= */
 let playlist=[]; try{ playlist=JSON.parse(localStorage.getItem('kp.playlist')||'[]'); }catch(e){}
@@ -229,13 +311,13 @@ function renderPlaylist(){
   const box=$('playlist'); box.innerHTML='';
   if(!playlist.length){ box.innerHTML='<div class="empty">Playlist is empty.<br>Search for a song on the left and click Add.</div>'; return; }
   playlist.forEach((it,i)=>{
-    const miss = libList.length && !library.has(it.path);
+    const s = library.get(it.path), miss = libList.length && (!s || !s.online);
     const r=document.createElement('div');
     r.className='row'+(it.id===currentId?' current':'')+(it.played?' played':'')+(miss?' missing':'');
     r.innerHTML=`<span class="num">${it.played?'✓':i+1}</span><button title="Sing this song now">▶</button>
       <div class="name"><div></div></div>${it.key?`<span class="keytag">Key ${keyText(it.key)}</span>`:''}
       <button title="Move up">▲</button><button title="Move down">▼</button><button title="Remove">✕</button>`;
-    r.querySelector('.name div').textContent=it.name+(miss?'  (file not found)':'');
+    r.querySelector('.name div').textContent=it.name+(miss?(s?'  (drive not plugged in)':'  (file not found)'):'');
     const b=r.querySelectorAll('button');
     b[0].onclick=()=>playItem(it);
     b[1].onclick=()=>{ if(i>0){ [playlist[i-1],playlist[i]]=[playlist[i],playlist[i-1]]; save(); renderPlaylist(); } };
@@ -259,8 +341,8 @@ function nextItem(){ const i=playlist.findIndex(x=>x.id===currentId);
 async function decode(bytes){ const ctx=engine.ensure(); return await ctx.decodeAudioData(bytes.buffer ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset+bytes.byteLength) : bytes); }
 
 async function playItem(it){
-  if(!libList.length){ toast('Choose (or reconnect) the song folder first.'); return; }
-  const s=library.get(it.path); if(!s){ toast('That song file was not found in the song folder.'); return; }
+  const s=library.get(it.path); if(!s){ toast('That song file was not found in the library.'); return; }
+  if(!s.online){ toast('That song is on a drive that isn’t plugged in.'); return; }
   stopSong(true);
   busy(true,'Loading '+s.name+'…');
   try{
@@ -565,8 +647,9 @@ window.addEventListener('beforeunload', ()=>{ if(tv && !tv.closed) tv.close(); }
 
 renderPlaylist(); updateKeyUI(); listOutputs(); listInputs(); updateRecUI();
 (async()=>{
-  const dir=localStorage.getItem('kp.root'); if(dir) await loadFolder(dir);
+  await loadIndex();
+  if(!folders.length){ $('btnFolder').click(); } else rescan(null,true);   // opens instantly, then checks for new songs
   if(await window.api.hasTV()) openTV();   // TV plugged in: put lyrics screen on it right away
   document.title='Karaoke Player '+(await window.api.version());
 })();
-window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadFolder,song:()=>song,tv:()=>tv,rec};
+window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec};
