@@ -6,7 +6,7 @@
   "main": "main.js",
   "author": "John Camby Henson",
   "license": "UNLICENSED",
-  "repository": "github:OWNER/REPO",
+  "repository": "github:cambnyhenson/Papaw-kareoke-app",
   "private": true,
   "scripts": {
     "start": "electron .",
