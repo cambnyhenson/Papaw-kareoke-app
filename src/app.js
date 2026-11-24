@@ -304,9 +304,12 @@ function dur(){ return usesElement() ? (video.duration||0) : engine.duration; }
 function play(){ if(!song) return; engine.ensure();
   if(usesElement()) video.play(); else { engine.play(); if(song.kind==='video'){ video.currentTime=engine.position(); video.play().catch(()=>{}); } }
   const it=current(); if(it && !it.played){ it.played=true; save(); renderPlaylist(); }
+  if(rec.armed && !rec.active) startRecording(song.item.name);
+  recAudioStop();
   $('btnPlay').textContent='❚❚'; }
 function pause(){ if(usesElement()) video.pause(); else { engine.pause(); if(song&&song.kind==='video') video.pause(); } $('btnPlay').textContent='▶'; }
 function stopSong(silent){
+  stopRecording();
   engine.unload(); video.pause(); video.removeAttribute('src'); video.load();
   if(videoUrl){ URL.revokeObjectURL(videoUrl); videoUrl=null; }
   cdg.load(null); song=null; currentId=null;
@@ -326,7 +329,7 @@ $('btnPlay').onclick=()=>{ isPlaying()?pause():play(); };
 $('btnStop').onclick=()=>stopSong();
 $('btnNext').onclick=()=>{ const n=nextItem(); if(n) playItem(n); else toast('No more songs on the playlist'); };
 $('bar').onclick=e=>{ if(!song) return; const r=e.currentTarget.getBoundingClientRect(); seek((e.clientX-r.left)/r.width*dur()); };
-$('vol').oninput=e=>{ const v=e.target.value/100; engine.setVolume(v); video.volume=v; localStorage.setItem('kp.vol',e.target.value); };
+$('vol').oninput=e=>{ const v=e.target.value/100; engine.setVolume(v); video.volume=v; recAudio.volume=v; localStorage.setItem('kp.vol',e.target.value); };
 $('vol').value=localStorage.getItem('kp.vol')||100; engine.setVolume($('vol').value/100); video.volume=$('vol').value/100;
 $('auto').checked=localStorage.getItem('kp.auto')==='1'; $('auto').onchange=e=>localStorage.setItem('kp.auto',e.target.checked?'1':'0');
 
@@ -361,9 +364,134 @@ async function applyOutput(){
   const id=$('outDev').value;
   try{ if(engine.ctx && engine.ctx.setSinkId) await engine.ctx.setSinkId(id); }catch(e){ toast('Could not switch sound output: '+e.message); }
   try{ if(video.setSinkId) await video.setSinkId(id); }catch(e){}
+  try{ if(recAudio.setSinkId) await recAudio.setSinkId(id); }catch(e){}
 }
 $('outDev').onchange=()=>{ const o=$('outDev').selectedOptions[0]; localStorage.setItem('kp.outLabel', o.value? o.textContent : ''); $('outDev').title='Pick the mixer here'; applyOutput(); };
-if(navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listOutputs);
+if(navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', ()=>{ listOutputs(); listInputs(); });
+
+/* ================= RECORDING =================
+   Records the mixer's USB input (its main mix: the mic with the mixer's effects plus the
+   karaoke track) and saves an MP3 to Documents\Karaoke Recordings. */
+const rec = { stream:null, src:null, node:null, mute:null, analyser:null, worker:null, active:false, started:0,
+  title:'', armed: localStorage.getItem('kp.rec')==='1', pending:[], workletReady:false, level:0 };
+const recAudio = new Audio();
+let recPlaying=null;
+
+async function listInputs(){
+  const sel=$('inDev'), saved=localStorage.getItem('kp.inLabel')||'', before=sel.value;
+  let devs=[]; try{ devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput' && d.deviceId!=='default' && d.deviceId!=='communications'); }catch(e){}
+  sel.innerHTML='<option value="">— none —</option>';
+  for(const d of devs){ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||'Recording device'; sel.appendChild(o); }
+  const match=devs.find(d=>d.label===saved);
+  sel.value = match ? match.deviceId : '';
+  if(sel.value!==before || !rec.stream) openInput();
+}
+$('inDev').onchange=()=>{ const o=$('inDev').selectedOptions[0]; localStorage.setItem('kp.inLabel', o.value? o.textContent : ''); openInput(); };
+
+async function openInput(){
+  closeInput();
+  const id=$('inDev').value; if(!id) return;
+  const ctx=engine.ensure();
+  try{
+    rec.stream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id}, echoCancellation:false,
+      noiseSuppression:false, autoGainControl:false, channelCount:{ideal:2}}});
+    if(!rec.workletReady){ await ctx.audioWorklet.addModule('recorder-worklet.js'); rec.workletReady=true; }
+  }catch(e){ rec.stream=null; toast('Could not open the recording input: '+e.message, 6000); return; }
+  rec.src=ctx.createMediaStreamSource(rec.stream);
+  rec.analyser=ctx.createAnalyser(); rec.analyser.fftSize=1024; rec.src.connect(rec.analyser);
+  rec.node=new AudioWorkletNode(ctx,'capture',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:2,channelCountMode:'explicit'});
+  rec.src.connect(rec.node);
+  rec.mute=ctx.createGain(); rec.mute.gain.value=0; rec.node.connect(rec.mute); rec.mute.connect(ctx.destination); // keeps it running, silent
+  rec.node.port.onmessage=e=>{ if(rec.active) rec.worker.postMessage({type:'data', l:e.data[0], r:e.data[1]}, [e.data[0].buffer, e.data[1].buffer]); };
+  rec.stream.getAudioTracks()[0].onended=()=>{ toast('The recording input was disconnected.', 6000); closeInput(); };
+}
+function closeInput(){
+  stopRecording();
+  try{ rec.src&&rec.src.disconnect(); rec.node&&rec.node.disconnect(); rec.mute&&rec.mute.disconnect(); }catch(e){}
+  if(rec.stream) rec.stream.getTracks().forEach(t=>t.stop());
+  rec.stream=rec.src=rec.node=rec.analyser=rec.mute=null;
+}
+
+function startRecording(title){
+  if(!rec.node){ toast('Recording is on, but no input is picked. Choose the mixer under "Record from".', 7000); return false; }
+  if(!rec.worker){ rec.worker=new Worker('mp3-worker.js'); rec.worker.onmessage=e=>finishSave(e.data); }
+  rec.worker.postMessage({type:'start', sampleRate:engine.ctx.sampleRate});
+  rec.node.port.postMessage('start');
+  rec.active=true; rec.started=performance.now(); rec.title=title;
+  updateRecUI(); return true;
+}
+function stopRecording(){
+  if(!rec.active) return;
+  rec.active=false; if(rec.node) rec.node.port.postMessage('stop');
+  const secs=(performance.now()-rec.started)/1000;
+  rec.pending.push({title:rec.title, keep:secs>=3});   // throw away accidental 1–2 second takes
+  rec.worker.postMessage({type:'stop'});
+  updateRecUI();
+}
+async function finishSave(bytes){
+  const job=rec.pending.shift(); if(!job || !job.keep) return;
+  try{ const name=await window.api.recSave(job.title, bytes); toast('Recording saved: '+name, 5000);
+    if($('recView').style.display!=='none') showRecordings(); }
+  catch(e){ toast('Could not save the recording: '+e.message, 8000); }
+}
+function updateRecUI(){
+  $('btnRec').classList.toggle('on', rec.armed);
+  $('btnRec').textContent = rec.armed ? '● REC ON' : '● REC';
+  if(!rec.active) $('recInfo').textContent='';
+}
+$('btnRec').onclick=()=>{
+  rec.armed=!rec.armed; localStorage.setItem('kp.rec', rec.armed?'1':'0');
+  if(rec.armed && song && isPlaying() && !rec.active) startRecording(song.item.name);
+  if(!rec.armed) stopRecording();
+  updateRecUI();
+};
+const meterBuf=new Float32Array(1024);
+function recTick(){
+  if(rec.active) $('recInfo').textContent='● REC '+fmt((performance.now()-rec.started)/1000);
+  let peak=0;
+  if(rec.analyser){ rec.analyser.getFloatTimeDomainData(meterBuf); for(let i=0;i<meterBuf.length;i++){ const v=Math.abs(meterBuf[i]); if(v>peak) peak=v; } }
+  rec.level=Math.max(peak, rec.level*0.9);
+  $('meterFill').style.width=Math.min(100, rec.level*100)+'%';
+}
+
+/* Recordings tab */
+function showTab(which){
+  const recs=which==='rec';
+  $('libView').style.display=recs?'none':''; $('recView').style.display=recs?'':'none';
+  $('tabLib').classList.toggle('active',!recs); $('tabRec').classList.toggle('active',recs);
+  $('btnRecFolder').style.display=recs?'':'none';
+  if(recs) showRecordings();
+}
+$('tabLib').onclick=()=>showTab('lib'); $('tabRec').onclick=()=>showTab('rec');
+$('btnRecFolder').onclick=()=>window.api.recFolder();
+function recAudioStop(){ recAudio.pause(); if(recAudio.src){ URL.revokeObjectURL(recAudio.src); recAudio.removeAttribute('src'); } recPlaying=null; }
+recAudio.onended=()=>{ recAudioStop(); showRecordings(); };
+async function showRecordings(){
+  const box=$('recList'); const list=await window.api.recList();
+  box.innerHTML='';
+  if(!list.length){ box.innerHTML='<div class="empty">No recordings yet.<br>Pick the mixer under "Record from", turn on ● REC, and sing a song.</div>'; return; }
+  for(const r of list){
+    const row=document.createElement('div'); row.className='row';
+    const playing=recPlaying===r.name;
+    row.innerHTML=`<button title="${playing?'Stop':'Listen'}">${playing?'■':'▶'}</button><div class="name"><div></div><div class="meta"></div></div>
+      <button title="Show in folder">📂</button><button title="Delete (moves it to the Recycle Bin)">🗑</button>`;
+    row.querySelector('.name div').textContent=r.name.replace(/\.(mp3|wav|webm)$/i,'');
+    row.querySelector('.meta').textContent=new Date(r.time).toLocaleString()+' · '+(r.size/1048576).toFixed(1)+' MB';
+    const b=row.querySelectorAll('button');
+    b[0].onclick=async()=>{
+      if(playing){ recAudioStop(); return showRecordings(); }
+      if(song && isPlaying()) pause();
+      recAudioStop();
+      const bytes=await window.api.recRead(r.name);
+      recAudio.src=URL.createObjectURL(new Blob([bytes],{type:'audio/mpeg'})); recPlaying=r.name;
+      recAudio.volume=$('vol').value/100; recAudio.play(); showRecordings();
+    };
+    b[1].onclick=()=>window.api.recShow(r.name);
+    b[2].onclick=async()=>{ if(!confirm('Move "'+r.name+'" to the Recycle Bin?')) return;
+      if(recPlaying===r.name) recAudioStop(); await window.api.recDelete(r.name); showRecordings(); };
+    box.appendChild(row);
+  }
+}
 
 /* ================= TV SCREEN ================= */
 let tv=null, tvCanvas=null;
@@ -421,6 +549,7 @@ function tick(){
     }
   }
   $('fill').style.width = d? (p/d*100)+'%' : '0';
+  recTick();
   $('tCur').textContent=fmt(p); $('tDur').textContent=fmt(d);
   if(song) $('btnPlay').textContent = isPlaying()?'❚❚':'▶';
   if(pCanvas.style.display!=='none') drawScreen(pCanvas);
@@ -434,10 +563,10 @@ function tick(){
 setInterval(tick, 250); // keeps going even if this window is minimized
 window.addEventListener('beforeunload', ()=>{ if(tv && !tv.closed) tv.close(); });
 
-renderPlaylist(); updateKeyUI(); listOutputs();
+renderPlaylist(); updateKeyUI(); listOutputs(); listInputs(); updateRecUI();
 (async()=>{
   const dir=localStorage.getItem('kp.root'); if(dir) await loadFolder(dir);
   if(await window.api.hasTV()) openTV();   // TV plugged in: put lyrics screen on it right away
   document.title='Karaoke Player '+(await window.api.version());
 })();
-window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadFolder,song:()=>song,tv:()=>tv};
+window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadFolder,song:()=>song,tv:()=>tv,rec};

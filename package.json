@@ -1,7 +1,7 @@
 {
   "name": "karaoke-player",
   "productName": "Karaoke Player",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Simple karaoke show player: MP3+G, CDG and MP4 with lyrics on the TV, key change, and a saved playlist.",
   "main": "main.js",
   "author": "John Camby Henson",

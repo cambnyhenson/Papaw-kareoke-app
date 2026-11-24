@@ -62,3 +62,14 @@
   select{font:inherit;color:var(--text);background:#0d1014;border:1px solid var(--line);border-radius:8px;padding:7px 10px;max-width:280px}
   .out{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:14px}
   .folder-name{color:var(--dim);font-size:13px;max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .view{display:flex;flex-direction:column;flex:1;min-height:0}
+  .panel h2 .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;padding:2px 4px;margin-right:10px;font-size:16px;font-weight:600;color:var(--dim)}
+  .panel h2 .tab.active{color:var(--text);border-bottom-color:var(--accent)}
+  .meter{width:70px;height:10px;background:#0d1014;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .meter div{height:100%;width:0;background:linear-gradient(90deg,var(--good) 0 70%,var(--accent) 70% 88%,var(--bad) 88%)}
+  .meter div{background-size:70px 100%;background-repeat:no-repeat}
+  button.rec{color:var(--bad);font-weight:700}
+  button.rec.on{background:var(--bad);border-color:var(--bad);color:#fff}
+  .nprow{display:flex;align-items:center;gap:12px;min-width:0}
+  .recinfo{color:var(--bad);font-weight:700;white-space:nowrap}
+  .row .meta{color:var(--dim);font-size:12px}

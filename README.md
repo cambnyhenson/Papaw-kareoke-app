@@ -6,6 +6,9 @@ A simple Windows karaoke show player built for one person: Grandpa.
 - **Lyrics on the TV**: opens full screen on the second display automatically
 - **Key change** (±6 semitones) without changing the speed, remembered per song
 - **Playlist** that is saved automatically and survives restarts
+- **Recording**: pick the mixer under "Record from", turn on ● REC, and every song played is
+  saved as an MP3 (the mixer's full mix: voice plus track) in `Documents\Karaoke Recordings`.
+  The Recordings tab plays them back, shows them in Explorer, or moves them to the Recycle Bin
 - **Sound to:** lets you pick the mixer directly. Audio goes through Windows' shared
   mode, so the track's sample rate (44.1k or 48k) never has to match the mixer
 

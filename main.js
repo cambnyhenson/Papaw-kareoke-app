@@ -1,5 +1,5 @@
 // Karaoke Player — Electron main process
-const { app, BrowserWindow, ipcMain, dialog, screen, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 
@@ -90,6 +90,38 @@ ipcMain.handle('read', async (_e, rel) => {
   if (full !== root && !full.startsWith(root + path.sep)) throw new Error('Outside song folder');
   return await fs.readFile(full);
 });
+
+/* ---------- recordings (Documents\Karaoke Recordings) ---------- */
+const recDir = () => path.join(app.getPath('documents'), 'Karaoke Recordings');
+const recPath = name => {
+  const full = path.resolve(recDir(), path.basename(name));
+  if (path.dirname(full) !== path.resolve(recDir())) throw new Error('Bad file name');
+  return full;
+};
+function stamp(d = new Date()) {
+  const h = d.getHours() % 12 || 12, ap = d.getHours() < 12 ? 'am' : 'pm';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${h}.${p(d.getMinutes())}${ap}`;
+}
+ipcMain.handle('rec-save', async (_e, title, bytes) => {
+  await fs.mkdir(recDir(), { recursive: true });
+  const clean = String(title).replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Recording';
+  let name = `${clean} - ${stamp()}.mp3`, n = 2;
+  while (await fs.stat(path.join(recDir(), name)).then(() => true, () => false)) name = `${clean} - ${stamp()} (${n++}).mp3`;
+  await fs.writeFile(path.join(recDir(), name), Buffer.from(bytes));
+  return name;
+});
+ipcMain.handle('rec-list', async () => {
+  let names = [];
+  try { names = (await fs.readdir(recDir())).filter(n => /\.(mp3|wav|webm)$/i.test(n)); } catch { return []; }
+  const out = [];
+  for (const name of names) { try { const st = await fs.stat(path.join(recDir(), name)); out.push({ name, size: st.size, time: st.mtimeMs }); } catch {} }
+  return out.sort((a, b) => b.time - a.time);
+});
+ipcMain.handle('rec-read', async (_e, name) => fs.readFile(recPath(name)));
+ipcMain.handle('rec-delete', async (_e, name) => { await shell.trashItem(recPath(name)); return true; }); // goes to the Recycle Bin
+ipcMain.handle('rec-show', (_e, name) => shell.showItemInFolder(recPath(name)));
+ipcMain.handle('rec-folder', async () => { await fs.mkdir(recDir(), { recursive: true }); return shell.openPath(recDir()); });
 
 ipcMain.handle('has-tv', () => tvDisplay().external);
 ipcMain.handle('version', () => app.getVersion());

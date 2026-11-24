@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:">
+  content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:">
 <title>Karaoke Player</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -17,12 +17,18 @@
     <div class="out">Sound to:
       <select id="outDev" title="Pick the mixer here"><option value="">Windows default</option></select>
     </div>
+    <div class="out">Record from:
+      <select id="inDev" title="Pick the mixer here"><option value="">— none —</option></select>
+      <div class="meter" title="Input level"><div id="meterFill"></div></div>
+    </div>
     <div class="status" id="status">No song folder loaded</div>
   </header>
 
   <main>
     <section class="panel">
-      <h2>Song Library</h2>
+      <h2><button class="tab active" id="tabLib">Song Library</button><button class="tab" id="tabRec">Recordings</button>
+        <span class="sp"></span><button id="btnRecFolder" style="display:none">Open Folder</button></h2>
+      <div id="libView" class="view">
       <div class="search">
         <input type="text" id="q" placeholder="Search by song or artist…" autocomplete="off">
         <div class="count" id="count"></div>
@@ -34,8 +40,13 @@
           2. Under <b>Sound to</b>, pick the mixer.<br>
           3. With the TV plugged in, click <b>📺 TV Screen</b>. It opens full screen on the TV. Double-click it to switch full screen on or off.<br>
           4. Search for a song and click <b>Add</b>, then click <b>▶</b> on the playlist to sing it.<br><br>
-          Plays MP3+G zip files, matching .mp3 + .cdg files, and MP4 karaoke videos.
+          Plays MP3+G zip files, matching .mp3 + .cdg files, and MP4 karaoke videos.<br><br>
+          <b>Recording:</b> pick the mixer under <b>Record from</b> and turn on <b>● REC</b>. Every song played while it's on is saved as an MP3 in Documents › Karaoke Recordings.
         </div>
+      </div>
+      </div>
+      <div id="recView" class="view" style="display:none">
+        <div class="list" id="recList"></div>
       </div>
     </section>
 
@@ -54,13 +65,14 @@
       <video id="video" playsinline muted style="display:none"></video>
     </div>
     <div class="controls">
-      <div class="np" id="np">Nothing playing</div>
+      <div class="nprow"><div class="np" id="np">Nothing playing</div><span class="recinfo" id="recInfo"></span></div>
       <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
       <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
       <div class="btns">
         <button class="big" id="btnPlay" disabled>▶</button>
         <button class="big" id="btnStop" disabled>■</button>
         <button class="big" id="btnNext" title="Play the next song on the playlist">⏭</button>
+        <button class="big rec" id="btnRec" title="When on, every song you play is recorded">● REC</button>
         <div class="key">
           Key
           <button class="big" id="keyDown">♭ −</button>
