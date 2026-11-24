@@ -1,0 +1,61 @@
+{
+  "name": "karaoke-player",
+  "productName": "Karaoke Player",
+  "version": "1.0.0",
+  "description": "Simple karaoke show player: MP3+G, CDG and MP4 with lyrics on the TV, key change, and a saved playlist.",
+  "main": "main.js",
+  "author": "John Camby Henson",
+  "license": "UNLICENSED",
+  "repository": "github:OWNER/REPO",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "build": {
+    "appId": "com.ozarkmountainai.karaokeplayer",
+    "productName": "Karaoke Player",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Karaoke Player",
+      "artifactName": "Karaoke-Player-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Karaoke-Player-Portable-${version}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "playwright-core": "^1.65.1"
+  }
+}

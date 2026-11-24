@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:">
+<title>Karaoke Player</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🎤 Karaoke Player</h1>
+    <button class="primary" id="btnFolder">Choose Song Folder</button>
+    <span class="folder-name" id="folderName"></span>
+    <button id="btnTV">📺 TV Screen</button>
+    <div class="out">Sound to:
+      <select id="outDev" title="Pick the mixer here"><option value="">Windows default</option></select>
+    </div>
+    <div class="status" id="status">No song folder loaded</div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Song Library</h2>
+      <div class="search">
+        <input type="text" id="q" placeholder="Search by song or artist…" autocomplete="off">
+        <div class="count" id="count"></div>
+      </div>
+      <div class="list" id="results">
+        <div class="help">
+          <b>Getting started</b><br>
+          1. Click <b>Choose Song Folder</b> and pick the folder with the karaoke songs. It's remembered next time.<br>
+          2. Under <b>Sound to</b>, pick the mixer.<br>
+          3. With the TV plugged in, click <b>📺 TV Screen</b>. It opens full screen on the TV. Double-click it to switch full screen on or off.<br>
+          4. Search for a song and click <b>Add</b>, then click <b>▶</b> on the playlist to sing it.<br><br>
+          Plays MP3+G zip files, matching .mp3 + .cdg files, and MP4 karaoke videos.
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Playlist <span class="sp"></span>
+        <button id="btnClearPlayed" title="Remove songs that have already been sung">Clear Sung</button>
+        <button id="btnClearAll">Clear All</button>
+      </h2>
+      <div class="list" id="playlist"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="preview">
+      <canvas id="previewCanvas" width="480" height="270"></canvas>
+      <video id="video" playsinline muted style="display:none"></video>
+    </div>
+    <div class="controls">
+      <div class="np" id="np">Nothing playing</div>
+      <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
+      <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+      <div class="btns">
+        <button class="big" id="btnPlay" disabled>▶</button>
+        <button class="big" id="btnStop" disabled>■</button>
+        <button class="big" id="btnNext" title="Play the next song on the playlist">⏭</button>
+        <div class="key">
+          Key
+          <button class="big" id="keyDown">♭ −</button>
+          <span class="val" id="keyVal">0</span>
+          <button class="big" id="keyUp">♯ +</button>
+        </div>
+        <div class="vol">🔊 <input type="range" id="vol" min="0" max="100" value="100"></div>
+        <label class="chk"><input type="checkbox" id="auto"> Auto-play next song</label>
+      </div>
+    </div>
+  </footer>
+</div>
+<div class="msg" id="msg"></div>
+<div class="busy" id="busy">Loading…</div>
+
+<script src="vendor/soundtouch.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

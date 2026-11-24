@@ -1,0 +1,443 @@
+
+
+const $ = id => document.getElementById(id);
+const fmt = s => { s = Math.max(0, s|0); return (s/60|0) + ':' + String(s%60).padStart(2,'0'); };
+let msgTimer;
+function toast(t, ms=4000){ const m=$('msg'); m.textContent=t; m.style.display='block'; clearTimeout(msgTimer); msgTimer=setTimeout(()=>m.style.display='none', ms); }
+function busy(on, text='Loading…'){ $('busy').textContent=text; $('busy').style.display=on?'flex':'none'; }
+
+/* ================= AUDIO ENGINE =================
+   Plays through the normal Windows sound path (shared mode). Windows converts
+   to whatever sample rate the mixer runs at, so 44.1k vs 48k never matters. */
+class Engine {
+  constructor(){ this.ctx=null; this.gain=null; this.buffer=null; this.semis=0; this.playing=false;
+    this.offset=0; this.node=null; this.shifter=null; this.gen=0; this.onended=null; this.volume=1; }
+  ensure(){
+    if(!this.ctx){
+      this.ctx = new AudioContext({latencyHint:'playback'});
+      this.gain = this.ctx.createGain(); this.gain.gain.value=this.volume; this.gain.connect(this.ctx.destination);
+      applyOutput();
+    }
+    if(this.ctx.state==='suspended') this.ctx.resume();
+    return this.ctx;
+  }
+  setVolume(v){ this.volume=v; if(this.gain) this.gain.gain.value=v; }
+  load(buffer){ this.stopNodes(); this.buffer=buffer; this.offset=0; this.playing=false; }
+  unload(){ this.stopNodes(); this.buffer=null; this.offset=0; this.playing=false; }
+  get duration(){ return this.buffer ? this.buffer.duration : 0; }
+  position(){
+    if(!this.buffer) return 0;
+    if(!this.playing) return this.offset;
+    const now=this.ctx.currentTime;
+    if(this.node) return Math.min(this.duration, this.offset + (now - this.startedAt));
+    if(this.shifter){ const s=this.sh; return Math.max(0, Math.min(this.duration, s.pos + (now - s.at) - s.lat)); }
+    return this.offset;
+  }
+  play(){ if(!this.buffer||this.playing) return; this.ensure(); if(this.offset>=this.duration-0.05) this.offset=0;
+    this.startNodes(this.offset); this.playing=true; }
+  pause(){ if(!this.playing) return; this.offset=this.position(); this.stopNodes(); this.playing=false; }
+  seek(t){ t=Math.max(0,Math.min(this.duration-0.05,t)); const was=this.playing; if(was) this.stopNodes();
+    this.offset=t; if(was) this.startNodes(t); }
+  setKey(s){ const pos=this.position(); this.semis=s; if(this.playing){ this.stopNodes(); this.offset=pos; this.startNodes(pos); } }
+  finish(gen){ if(gen!==this.gen || !this.playing) return; this.stopNodes(); this.playing=false; this.offset=this.duration; this.onended && this.onended(); }
+  startNodes(off){
+    const ctx=this.ctx, gen=++this.gen;
+    if(this.semis===0){
+      // untouched original audio when no key change
+      const n=ctx.createBufferSource(); n.buffer=this.buffer; n.connect(this.gain);
+      n.onended=()=>this.finish(gen);
+      this.startedAt=ctx.currentTime; n.start(0, off); this.node=n;
+    } else {
+      let done=false;
+      const sh=new PitchShifter(ctx, this.buffer, 4096, ()=>{ if(done) return; done=true; setTimeout(()=>this.finish(gen),0); });
+      sh.pitchSemitones=this.semis;
+      sh.percentagePlayed = off/this.duration;
+      const lat = 4096/ctx.sampleRate;
+      this.sh={pos:off, at:ctx.currentTime+lat, lat:0};
+      sh.on('play', d=>{ if(gen===this.gen) this.sh={pos:d.timePlayed, at:ctx.currentTime, lat}; });
+      sh.connect(this.gain); this.shifter=sh;
+    }
+  }
+  stopNodes(){
+    this.gen++;
+    if(this.node){ this.node.onended=null; try{this.node.stop();}catch(e){} this.node.disconnect(); this.node=null; }
+    if(this.shifter){ try{ this.shifter.node.onaudioprocess=null; this.shifter.disconnect(); }catch(e){} this.shifter=null; }
+  }
+}
+const engine = new Engine();
+document.addEventListener('pointerdown', ()=>engine.ensure(), {capture:true});
+
+/* ================= CDG (CD+G lyrics) DECODER ================= */
+class CDG {
+  constructor(){ this.canvas=document.createElement('canvas'); this.canvas.width=300; this.canvas.height=216;
+    this.c2=this.canvas.getContext('2d'); this.img=this.c2.createImageData(300,216); this.load(null); }
+  load(bytes){ this.data=bytes; this.reset(); }
+  reset(){ this.pix=new Uint8Array(300*216); this.pal=new Array(16).fill(0).map(()=>[0,0,0]);
+    this.pos=0; this.hOff=0; this.vOff=0; this.dirty=true; }
+  update(t){
+    if(!this.data) return;
+    const total=(this.data.length/24)|0, target=Math.max(0,Math.min(total, Math.floor(t*300)));
+    if(target<this.pos) this.reset();
+    while(this.pos<target){ this.packet(this.pos*24); this.pos++; }
+    if(this.dirty) this.render();
+  }
+  packet(o){
+    const d=this.data; if((d[o]&0x3F)!==9) return;
+    const ins=d[o+1]&0x3F, p=o+4;
+    switch(ins){
+      case 1: this.pix.fill(d[p]&15); this.dirty=true; break;                       // memory preset
+      case 2: { const c=d[p]&15; for(let y=0;y<216;y++) for(let x=0;x<300;x++)       // border preset
+                  if(x<6||x>=294||y<12||y>=204) this.pix[y*300+x]=c; this.dirty=true; break; }
+      case 6: this.tile(p,false); break;
+      case 38: this.tile(p,true); break;
+      case 20: this.scroll(p,false); break;
+      case 24: this.scroll(p,true); break;
+      case 30: case 31: { const base=ins===30?0:8;                                   // colour table
+        for(let i=0;i<8;i++){ const hi=d[p+2*i], lo=d[p+2*i+1];
+          this.pal[base+i]=[((hi&0x3C)>>2)*17, (((hi&3)<<2)|((lo&0x30)>>4))*17, (lo&15)*17]; }
+        this.dirty=true; break; }
+    }
+  }
+  tile(p,xor){
+    const d=this.data, c0=d[p]&15, c1=d[p+1]&15, row=d[p+2]&0x1F, col=d[p+3]&0x3F;
+    const x0=col*6, y0=row*12; if(x0+6>300||y0+12>216) return;
+    for(let i=0;i<12;i++){ const bits=d[p+4+i]&0x3F;
+      for(let j=0;j<6;j++){ const c=(bits>>(5-j))&1 ? c1 : c0, k=(y0+i)*300+x0+j;
+        this.pix[k] = xor ? (this.pix[k]^c) : c; } }
+    this.dirty=true;
+  }
+  scroll(p,copy){
+    const d=this.data, color=d[p]&15, hs=d[p+1]&0x3F, vs=d[p+2]&0x3F;
+    const hc=(hs&0x30)>>4, vc=(vs&0x30)>>4;
+    this.hOff=Math.min(hs&7,5); this.vOff=Math.min(vs&15,11);
+    const dx = hc===1?6 : hc===2?-6 : 0, dy = vc===1?12 : vc===2?-12 : 0;
+    if(dx||dy){ const o=this.pix, n=new Uint8Array(300*216);
+      for(let y=0;y<216;y++) for(let x=0;x<300;x++){
+        let sx=x-dx, sy=y-dy;
+        if(copy){ sx=(sx+300)%300; sy=(sy+216)%216; n[y*300+x]=o[sy*300+sx]; }
+        else n[y*300+x] = (sx<0||sx>=300||sy<0||sy>=216) ? color : o[sy*300+sx]; }
+      this.pix=n; }
+    this.dirty=true;
+  }
+  render(){
+    const a=this.img.data, pal=this.pal, pix=this.pix, ho=this.hOff, vo=this.vOff;
+    for(let y=0;y<216;y++) for(let x=0;x<300;x++){
+      let k;
+      if(x<6||x>=294||y<12||y>=204) k=pix[y*300+x];
+      else k=pix[Math.min(215,y+vo)*300+Math.min(299,x+ho)];
+      const c=pal[k], i=(y*300+x)*4; a[i]=c[0]; a[i+1]=c[1]; a[i+2]=c[2]; a[i+3]=255; }
+    this.c2.putImageData(this.img,0,0); this.dirty=false;
+  }
+}
+const cdg = new CDG();
+
+/* ================= ZIP READER (MP3+G zips) ================= */
+async function readZip(bytes){
+  const dv=new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), n=bytes.byteLength;
+  let eocd=-1; for(let i=n-22;i>=Math.max(0,n-65557);i--) if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; }
+  if(eocd<0) throw new Error('Not a valid zip file');
+  const cdOff=dv.getUint32(eocd+16,true), cdEnd=cdOff+dv.getUint32(eocd+12,true);
+  const entries=[]; let p=cdOff;
+  while(p+46<=cdEnd && dv.getUint32(p,true)===0x02014b50){
+    const method=dv.getUint16(p+10,true), comp=dv.getUint32(p+20,true),
+      nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), lo=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(bytes.subarray(p+46, p+46+nl));
+    entries.push({name, method, comp, lo}); p+=46+nl+el+cl;
+  }
+  async function extract(e){
+    const start=e.lo+30+dv.getUint16(e.lo+26,true)+dv.getUint16(e.lo+28,true);
+    const raw=bytes.slice(start, start+e.comp);
+    if(e.method===0) return raw;
+    if(e.method===8) return new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    throw new Error('Unsupported zip compression');
+  }
+  const find = ext => entries.find(e=>e.name.toLowerCase().endsWith(ext) && !e.name.includes('__MACOSX'));
+  return { find, extract };
+}
+
+/* ================= LIBRARY ================= */
+const AUDIO=['mp3','m4a','wav','ogg','flac'], VIDEO=['mp4','m4v','webm','mkv','mov'];
+let library=new Map();   // path -> song
+let libList=[];
+const ext = n => { const i=n.lastIndexOf('.'); return i<0?'':n.slice(i+1).toLowerCase(); };
+const stripExt = n => { const i=n.lastIndexOf('.'); return i<0?n:n.slice(0,i); };
+const readFile = rel => window.api.read(rel);
+
+function buildLibrary(paths){
+  const groups=new Map();
+  for(const path of paths){
+    const e=ext(path), base=stripExt(path).toLowerCase();
+    let g=groups.get(base); if(!g){ g={}; groups.set(base,g); }
+    if(e==='zip') g.zip=path; else if(e==='cdg') g.cdg=path; else if(AUDIO.includes(e)) g.audio=path; else if(VIDEO.includes(e)) g.video=path;
+  }
+  library=new Map();
+  const add=(path,type,parts)=>{ const name=stripExt(path.split('/').pop()); const folder=path.split('/').slice(0,-1).join('/');
+    library.set(path,{path,name,folder,type,...parts,search:path.toLowerCase()}); };
+  for(const g of groups.values()){
+    if(g.zip) add(g.zip,'zip',{zip:g.zip});
+    if(g.audio && g.cdg) add(g.audio,'mp3g',{audio:g.audio,cdg:g.cdg});
+    else if(g.audio && !g.zip) add(g.audio,'audio',{audio:g.audio});
+    if(g.video) add(g.video,'video',{video:g.video});
+  }
+  libList=[...library.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
+  $('status').textContent = libList.length.toLocaleString()+' songs loaded';
+  doSearch(); renderPlaylist();
+}
+
+async function loadFolder(dir){
+  busy(true,'Scanning songs…');
+  try{
+    const paths=await window.api.scan(dir);
+    localStorage.setItem('kp.root', dir);
+    $('folderName').textContent=dir; $('folderName').title=dir;
+    buildLibrary(paths);
+    if(!paths.length) toast('No karaoke songs found in that folder.');
+  }catch(e){ toast('Could not open the song folder "'+dir+'". Is the drive plugged in? Click Choose Song Folder to pick it again.', 8000); }
+  busy(false);
+}
+$('btnFolder').onclick = async ()=>{ const dir=await window.api.pickFolder(); if(dir) await loadFolder(dir); };
+
+/* ================= SEARCH ================= */
+const typeLabel={zip:'MP3+G',mp3g:'MP3+G',video:'Video',audio:'Audio only'};
+function doSearch(){
+  const words=$('q').value.toLowerCase().split(/\s+/).filter(Boolean);
+  const res=[]; let n=0;
+  for(const s of libList){ if(words.every(w=>s.search.includes(w))){ n++; if(res.length<300) res.push(s); } }
+  $('count').textContent = libList.length ? (n.toLocaleString()+' match'+(n===1?'':'es')+(n>300?' — showing first 300, type more to narrow it down':'')) : '';
+  if(!libList.length) return;
+  const box=$('results'); box.innerHTML='';
+  if(!res.length){ box.innerHTML='<div class="empty">No songs match that search</div>'; return; }
+  for(const s of res){
+    const r=document.createElement('div'); r.className='row';
+    r.innerHTML=`<div class="name"><div></div><div class="folder"></div></div><span class="tag">${typeLabel[s.type]}</span><button>Add</button>`;
+    r.querySelector('.name div').textContent=s.name; r.querySelector('.folder').textContent=s.folder;
+    r.querySelector('button').onclick=()=>addToPlaylist(s);
+    r.ondblclick=()=>addToPlaylist(s);
+    box.appendChild(r);
+  }
+}
+let st; $('q').oninput=()=>{ clearTimeout(st); st=setTimeout(doSearch,120); };
+
+/* ================= PLAYLIST (saved automatically) ================= */
+let playlist=[]; try{ playlist=JSON.parse(localStorage.getItem('kp.playlist')||'[]'); }catch(e){}
+let currentId=null;
+const save=()=>{ try{ localStorage.setItem('kp.playlist', JSON.stringify(playlist)); }catch(e){} };
+const uid=()=>Math.random().toString(36).slice(2,10);
+function addToPlaylist(s){ playlist.push({id:uid(), path:s.path, name:s.name, key:0, played:false}); save(); renderPlaylist(); toast('Added: '+s.name,1500); }
+const keyText = k => k===0 ? 'Original key' : (k>0?'+':'')+k;
+function renderPlaylist(){
+  const box=$('playlist'); box.innerHTML='';
+  if(!playlist.length){ box.innerHTML='<div class="empty">Playlist is empty.<br>Search for a song on the left and click Add.</div>'; return; }
+  playlist.forEach((it,i)=>{
+    const miss = libList.length && !library.has(it.path);
+    const r=document.createElement('div');
+    r.className='row'+(it.id===currentId?' current':'')+(it.played?' played':'')+(miss?' missing':'');
+    r.innerHTML=`<span class="num">${it.played?'✓':i+1}</span><button title="Sing this song now">▶</button>
+      <div class="name"><div></div></div>${it.key?`<span class="keytag">Key ${keyText(it.key)}</span>`:''}
+      <button title="Move up">▲</button><button title="Move down">▼</button><button title="Remove">✕</button>`;
+    r.querySelector('.name div').textContent=it.name+(miss?'  (file not found)':'');
+    const b=r.querySelectorAll('button');
+    b[0].onclick=()=>playItem(it);
+    b[1].onclick=()=>{ if(i>0){ [playlist[i-1],playlist[i]]=[playlist[i],playlist[i-1]]; save(); renderPlaylist(); } };
+    b[2].onclick=()=>{ if(i<playlist.length-1){ [playlist[i+1],playlist[i]]=[playlist[i],playlist[i+1]]; save(); renderPlaylist(); } };
+    b[3].onclick=()=>{ if(it.id===currentId) stopSong(); playlist.splice(i,1); save(); renderPlaylist(); };
+    box.appendChild(r);
+  });
+}
+$('btnClearPlayed').onclick=()=>{ playlist=playlist.filter(i=>!i.played||i.id===currentId); save(); renderPlaylist(); };
+$('btnClearAll').onclick=()=>{ if(confirm('Remove every song from the playlist?')){ stopSong(); playlist=[]; save(); renderPlaylist(); } };
+
+/* ================= PLAYBACK ================= */
+const video=$('video'), pCanvas=$('previewCanvas');
+let song=null;          // {item, kind:'cdg'|'video'|'audio', videoAudio:'engine'|'element'}
+let videoUrl=null;
+
+function current(){ return playlist.find(i=>i.id===currentId); }
+function nextItem(){ const i=playlist.findIndex(x=>x.id===currentId);
+  return playlist.slice(i+1).find(x=>!x.played) || playlist.find(x=>!x.played && x.id!==currentId); }
+
+async function decode(bytes){ const ctx=engine.ensure(); return await ctx.decodeAudioData(bytes.buffer ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset+bytes.byteLength) : bytes); }
+
+async function playItem(it){
+  if(!libList.length){ toast('Choose (or reconnect) the song folder first.'); return; }
+  const s=library.get(it.path); if(!s){ toast('That song file was not found in the song folder.'); return; }
+  stopSong(true);
+  busy(true,'Loading '+s.name+'…');
+  try{
+    let buf=null, cdgBytes=null, kind='cdg', videoAudio='engine';
+    if(s.type==='zip'){
+      const z=await readZip(await readFile(s.zip));
+      const a=z.find('.mp3')||z.find('.m4a')||z.find('.wav')||z.find('.ogg'), c=z.find('.cdg');
+      if(!a) throw new Error('No audio file inside this zip');
+      buf=await decode(await z.extract(a)); if(c) cdgBytes=await z.extract(c); else kind='audio';
+    } else if(s.type==='mp3g'){
+      const [a,c]=await Promise.all([readFile(s.audio), readFile(s.cdg)]);
+      buf=await decode(a); cdgBytes=c;
+    } else if(s.type==='audio'){
+      buf=await decode(await readFile(s.audio)); kind='audio';
+    } else {
+      kind='video'; const bytes=await readFile(s.video);
+      videoUrl=URL.createObjectURL(new Blob([bytes])); video.src=videoUrl;
+      try{ buf=await decode(bytes); video.muted=true; }
+      catch(e){ videoAudio='element'; video.muted=false; }
+      if(video.readyState<1) await new Promise((res,rej)=>{ video.onloadedmetadata=res; video.onerror=()=>rej(new Error('This video format can’t be played')); });
+    }
+    cdg.load(cdgBytes);
+    if(buf) engine.load(buf); else engine.unload();
+    song={item:it, kind, videoAudio};
+    currentId=it.id; engine.semis = videoAudio==='element' ? 0 : it.key;
+    video.style.display = kind==='video' ? 'block':'none'; pCanvas.style.display = kind==='video' ? 'none':'block';
+    $('np').textContent=it.name;
+    $('btnPlay').disabled=false; $('btnStop').disabled=false;
+    updateKeyUI(); renderPlaylist();
+    busy(false);
+    play();
+  }catch(e){
+    busy(false); song=null; currentId=null; renderPlaylist();
+    toast('Could not play "'+s.name+'": '+e.message, 6000);
+  }
+}
+function usesElement(){ return song && song.kind==='video' && song.videoAudio==='element'; }
+function isPlaying(){ return usesElement() ? !video.paused : engine.playing; }
+function pos(){ return usesElement() ? video.currentTime : engine.position(); }
+function dur(){ return usesElement() ? (video.duration||0) : engine.duration; }
+function play(){ if(!song) return; engine.ensure();
+  if(usesElement()) video.play(); else { engine.play(); if(song.kind==='video'){ video.currentTime=engine.position(); video.play().catch(()=>{}); } }
+  const it=current(); if(it && !it.played){ it.played=true; save(); renderPlaylist(); }
+  $('btnPlay').textContent='❚❚'; }
+function pause(){ if(usesElement()) video.pause(); else { engine.pause(); if(song&&song.kind==='video') video.pause(); } $('btnPlay').textContent='▶'; }
+function stopSong(silent){
+  engine.unload(); video.pause(); video.removeAttribute('src'); video.load();
+  if(videoUrl){ URL.revokeObjectURL(videoUrl); videoUrl=null; }
+  cdg.load(null); song=null; currentId=null;
+  video.style.display='none'; pCanvas.style.display='block';
+  $('np').textContent='Nothing playing'; $('btnPlay').textContent='▶'; $('btnPlay').disabled=true; $('btnStop').disabled=true;
+  updateKeyUI(); if(!silent) renderPlaylist();
+}
+function seek(t){ if(!song) return; if(usesElement()) video.currentTime=t; else { engine.seek(t); if(song.kind==='video') video.currentTime=engine.position(); } }
+function songEnded(){
+  const n=nextItem(); stopSong();
+  if($('auto').checked && n) playItem(n);
+}
+engine.onended=songEnded;
+video.onended=()=>{ if(usesElement()) songEnded(); };
+
+$('btnPlay').onclick=()=>{ isPlaying()?pause():play(); };
+$('btnStop').onclick=()=>stopSong();
+$('btnNext').onclick=()=>{ const n=nextItem(); if(n) playItem(n); else toast('No more songs on the playlist'); };
+$('bar').onclick=e=>{ if(!song) return; const r=e.currentTarget.getBoundingClientRect(); seek((e.clientX-r.left)/r.width*dur()); };
+$('vol').oninput=e=>{ const v=e.target.value/100; engine.setVolume(v); video.volume=v; localStorage.setItem('kp.vol',e.target.value); };
+$('vol').value=localStorage.getItem('kp.vol')||100; engine.setVolume($('vol').value/100); video.volume=$('vol').value/100;
+$('auto').checked=localStorage.getItem('kp.auto')==='1'; $('auto').onchange=e=>localStorage.setItem('kp.auto',e.target.checked?'1':'0');
+
+/* key change */
+function updateKeyUI(){
+  const it=current(); const k=it?it.key:0; const disabled=!song||usesElement();
+  $('keyVal').textContent = k===0?'0':(k>0?'+':'')+k;
+  $('keyUp').disabled=disabled||k>=6; $('keyDown').disabled=disabled||k<=-6;
+  $('keyUp').title=$('keyDown').title = usesElement() ? 'Key change isn’t available for this video file' : '';
+}
+function changeKey(d){ const it=current(); if(!it||usesElement()) return; it.key=Math.max(-6,Math.min(6,it.key+d)); save();
+  engine.setKey(it.key); updateKeyUI(); renderPlaylist(); }
+$('keyUp').onclick=()=>changeKey(1); $('keyDown').onclick=()=>changeKey(-1);
+
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT' && e.target.type==='text') return;
+  if(e.code==='Space'){ e.preventDefault(); if(song) $('btnPlay').click(); }
+});
+
+/* ================= OUTPUT DEVICE (the mixer) ================= */
+async function listOutputs(){
+  const sel=$('outDev'), saved=localStorage.getItem('kp.outLabel')||'';
+  let devs=[]; try{ devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audiooutput' && d.deviceId!=='default' && d.deviceId!=='communications'); }catch(e){}
+  sel.innerHTML='<option value="">Windows default</option>';
+  for(const d of devs){ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||'Sound device'; sel.appendChild(o); }
+  const match=devs.find(d=>d.label===saved);
+  sel.value = match ? match.deviceId : '';
+  if(saved && !match) $('outDev').title='The saved device ('+saved+') is not plugged in — using Windows default';
+  applyOutput();
+}
+async function applyOutput(){
+  const id=$('outDev').value;
+  try{ if(engine.ctx && engine.ctx.setSinkId) await engine.ctx.setSinkId(id); }catch(e){ toast('Could not switch sound output: '+e.message); }
+  try{ if(video.setSinkId) await video.setSinkId(id); }catch(e){}
+}
+$('outDev').onchange=()=>{ const o=$('outDev').selectedOptions[0]; localStorage.setItem('kp.outLabel', o.value? o.textContent : ''); $('outDev').title='Pick the mixer here'; applyOutput(); };
+if(navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listOutputs);
+
+/* ================= TV SCREEN ================= */
+let tv=null, tvCanvas=null;
+function openTV(){
+  if(tv && !tv.closed){ tv.focus(); return; }
+  tv=window.open('','karaoke_tv');
+  if(!tv){ toast('Could not open the TV screen.'); return; }
+  tv.document.open();
+  tv.document.write(`<!DOCTYPE html><title>Karaoke – TV Screen</title><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}
+    canvas{width:100%;height:100%;display:block}</style><canvas id="c"></canvas>
+    <div id="h" style="position:fixed;left:0;right:0;bottom:20px;text-align:center;color:#888;font:18px Segoe UI,sans-serif">Double-click to go full screen</div>`);
+  tv.document.close();
+  tvCanvas=tv.document.getElementById('c');
+  const hint=tv.document.getElementById('h');
+  const syncHint=()=>{ const fs=!!tv.document.fullscreenElement || (tv.innerHeight>=tv.screen.height-2 && tv.innerWidth>=tv.screen.width-2);
+    hint.style.display=fs?'none':''; tv.document.body.style.cursor=fs?'none':''; };
+  tv.document.addEventListener('dblclick',()=>{ const d=tv.document; if(d.fullscreenElement) d.exitFullscreen(); else d.documentElement.requestFullscreen().catch(()=>{}); });
+  tv.addEventListener('resize',syncHint); setTimeout(syncHint,300);
+  const loop=()=>{ if(tv && !tv.closed){ tick(); tv.requestAnimationFrame(loop); } }; tv.requestAnimationFrame(loop);
+}
+$('btnTV').onclick=openTV;
+
+function fit(ctx, W, H, src, sw, sh, smooth){
+  const s=Math.min(W/sw, H/sh), w=sw*s, h=sh*s;
+  ctx.imageSmoothingEnabled=smooth; ctx.drawImage(src,(W-w)/2,(H-h)/2,w,h);
+}
+function drawScreen(canvas){
+  const W=canvas.width, H=canvas.height, c=canvas.getContext('2d');
+  c.fillStyle='#000'; c.fillRect(0,0,W,H);
+  if(song && song.kind==='video' && video.videoWidth){ fit(c,W,H,video,video.videoWidth,video.videoHeight,true); return; }
+  if(song && song.kind==='cdg'){ fit(c,W,H,cdg.canvas,300,216,false); return; }
+  c.textAlign='center'; c.fillStyle='#fff';
+  if(song){ c.font=`600 ${H/12|0}px Segoe UI,sans-serif`; wrapText(c, song.item.name, W/2, H/2, W*0.9, H/10); return; }
+  const n=nextItem();
+  c.fillStyle='#f2b134'; c.font=`600 ${H/10|0}px Segoe UI,sans-serif`; c.fillText('🎤 Karaoke', W/2, H*0.38);
+  if(n){ c.fillStyle='#aaa'; c.font=`${H/18|0}px Segoe UI,sans-serif`; c.fillText('Up next', W/2, H*0.55);
+    c.fillStyle='#fff'; c.font=`600 ${H/14|0}px Segoe UI,sans-serif`; wrapText(c, n.name, W/2, H*0.66, W*0.9, H/12); }
+}
+function wrapText(c, t, x, y, maxW, lh){
+  const words=t.split(' '), lines=[]; let l='';
+  for(const w of words){ const tl=l?l+' '+w:w; if(c.measureText(tl).width>maxW && l){ lines.push(l); l=w; } else l=tl; }
+  lines.push(l); lines.slice(0,3).forEach((ln,i)=>c.fillText(ln,x,y+i*lh));
+}
+
+/* ================= MAIN LOOP ================= */
+let lastTick=0;
+function tick(){
+  const now=performance.now(); if(now-lastTick<12) return; lastTick=now;
+  const p=pos(), d=dur();
+  if(song){
+    if(song.kind==='cdg') cdg.update(p);
+    if(song.kind==='video' && !usesElement()){
+      if(engine.playing){ if(video.paused) video.play().catch(()=>{}); if(Math.abs(video.currentTime-p)>0.3) video.currentTime=p; }
+      else if(!video.paused) video.pause();
+    }
+  }
+  $('fill').style.width = d? (p/d*100)+'%' : '0';
+  $('tCur').textContent=fmt(p); $('tDur').textContent=fmt(d);
+  if(song) $('btnPlay').textContent = isPlaying()?'❚❚':'▶';
+  if(pCanvas.style.display!=='none') drawScreen(pCanvas);
+  if(tv && !tv.closed && tvCanvas){
+    const dpr=tv.devicePixelRatio||1, W=Math.round(tv.innerWidth*dpr), H=Math.round(tv.innerHeight*dpr);
+    if(tvCanvas.width!==W||tvCanvas.height!==H){ tvCanvas.width=W; tvCanvas.height=H; }
+    drawScreen(tvCanvas);
+  }
+}
+(function loop(){ tick(); requestAnimationFrame(loop); })();
+setInterval(tick, 250); // keeps going even if this window is minimized
+window.addEventListener('beforeunload', ()=>{ if(tv && !tv.closed) tv.close(); });
+
+renderPlaylist(); updateKeyUI(); listOutputs();
+(async()=>{
+  const dir=localStorage.getItem('kp.root'); if(dir) await loadFolder(dir);
+  if(await window.api.hasTV()) openTV();   // TV plugged in: put lyrics screen on it right away
+  document.title='Karaoke Player '+(await window.api.version());
+})();
+window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadFolder,song:()=>song,tv:()=>tv};
