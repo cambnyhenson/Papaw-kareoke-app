@@ -1,6 +1,6 @@
 // Smoke test run before every release (and locally).
 //   node test/ci-smoke.mjs                  -> runs the source app (Linux needs xvfb-run)
-//   APP_EXE="dist/win-unpacked/Karaoke Player.exe" node test/ci-smoke.mjs   -> runs the built app (CI)
+//   APP_EXE="dist/win-unpacked/The Butcher Karaoke.exe" node test/ci-smoke.mjs   -> runs the built app (CI)
 // Fails (exit 1) if any song type can't load, key change breaks, text boxes eat spaces,
 // the window can be navigated away, any page error happens, or the app won't close cleanly.
 import { _electron as electron } from 'playwright-core';
@@ -76,7 +76,7 @@ check(pageErrors.length === 0 && early.length === 0, 'no page errors' + (pageErr
 
 // closing goes through the "save recordings first" path and must finish
 const closed = new Promise(res => app.process().once('exit', () => res(true)));
-await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.getTitle().startsWith('Karaoke Player')).close());
+await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.getTitle().startsWith('The Butcher Karaoke')).close());
 check(await Promise.race([closed, new Promise(r => setTimeout(() => r(false), 15000))]), 'app closes cleanly');
 try { await app.close(); } catch {}
 

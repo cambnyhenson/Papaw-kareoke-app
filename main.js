@@ -1,10 +1,14 @@
-// Karaoke Player — Electron main process
+// The Butcher Karaoke — Electron main process
 const { app, BrowserWindow, ipcMain, dialog, screen, session, shell, Menu, powerSaveBlocker } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const { autoUpdater } = require('electron-updater');
 const reports = require('./reports');
 const { log } = reports;
+
+// Keep saved data (song library index, playlist, settings, logs) in the folder the app used when it
+// was called "Karaoke Player", so renaming it doesn't make it forget anything.
+if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'Karaoke Player'));
 
 let win = null;
 let tvWin = null;          // the TV (lyrics) window, when open
@@ -28,7 +32,7 @@ function tvDisplay() {
 function createWindow() {
   win = new BrowserWindow({
     width: 1280, height: 820, minWidth: 900, minHeight: 600, show: false,
-    backgroundColor: '#FFFFFF', title: 'Karaoke Player', autoHideMenuBar: true,
+    backgroundColor: '#FFFFFF', title: 'The Butcher Karaoke', autoHideMenuBar: true,
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -48,7 +52,7 @@ function createWindow() {
         x: external ? b.x : b.x + 80, y: external ? b.y : b.y + 80,
         width: external ? b.width : 960, height: external ? b.height : 540,
         fullscreen: external, backgroundColor: '#000000', autoHideMenuBar: true,
-        title: 'Karaoke – TV Screen', icon: path.join(__dirname, 'build', 'icon.png'),
+        title: 'The Butcher Karaoke – TV Screen', icon: path.join(__dirname, 'build', 'icon.png'),
         webPreferences: { backgroundThrottling: false },
       },
     };
@@ -77,8 +81,8 @@ function createWindow() {
   win.webContents.on('render-process-gone', async (_e, details) => {
     log('crash', 'screen process gone:', details);
     if (details.reason === 'clean-exit') return;
-    const r = await dialog.showMessageBox(win, { type: 'error', title: 'Karaoke Player',
-      message: 'Karaoke Player had a problem and needs to reload.',
+    const r = await dialog.showMessageBox(win, { type: 'error', title: 'The Butcher Karaoke',
+      message: 'The Butcher Karaoke had a problem and needs to reload.',
       detail: 'Send a report so it can be fixed? (Takes a second; the playlist is kept.)',
       buttons: ['Send report and reload', 'Just reload'], defaultId: 0, noLink: true });
     if (r.response === 0) await reports.send({ kind: 'crash', error: 'Screen process ' + details.reason + ' (exit code ' + details.exitCode + ')' });
@@ -125,8 +129,8 @@ let crashing = false;
 process.on('uncaughtException', async err => {
   log('crash', 'main process:', err);
   if (crashing || !app.isReady()) return; crashing = true;
-  const r = await dialog.showMessageBox(win || undefined, { type: 'error', title: 'Karaoke Player',
-    message: 'Karaoke Player hit a problem.', detail: 'Send a report so it can be fixed?',
+  const r = await dialog.showMessageBox(win || undefined, { type: 'error', title: 'The Butcher Karaoke',
+    message: 'The Butcher Karaoke hit a problem.', detail: 'Send a report so it can be fixed?',
     buttons: ['Send report', 'Close'], defaultId: 0, noLink: true });
   if (r.response === 0) {
     let state = {};
@@ -236,7 +240,7 @@ app.whenReady().then(() => {
   const allowed = new Set(['media', 'speaker-selection', 'fullscreen']);
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
-  log('info', `--- Karaoke Player ${app.getVersion()} starting (Windows ${require('os').release()}, ${screen.getAllDisplays().length} display(s))`);
+  log('info', `--- The Butcher Karaoke ${app.getVersion()} starting (Windows ${require('os').release()}, ${screen.getAllDisplays().length} display(s))`);
   createWindow();
   setupUpdates();
   setTimeout(() => reports.sendPending(), 20000); // reports saved while offline

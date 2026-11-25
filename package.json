@@ -1,6 +1,6 @@
 {
   "name": "karaoke-player",
-  "productName": "Karaoke Player",
+  "productName": "The Butcher Karaoke",
   "version": "1.3.0",
   "description": "Simple karaoke show player: MP3+G, CDG and MP4 with lyrics on the TV, key change, and a saved playlist.",
   "main": "main.js",
@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "com.ozarkmountainai.karaokeplayer",
-    "productName": "Karaoke Player",
+    "productName": "The Butcher Karaoke",
     "files": [
       "main.js",
       "preload.js",
@@ -44,8 +44,8 @@
       "runAfterFinish": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Karaoke Player",
-      "artifactName": "Karaoke-Player-Setup-${version}.${ext}"
+      "shortcutName": "The Butcher Karaoke",
+      "artifactName": "The-Butcher-Karaoke-Setup-${version}.${ext}"
     },
     "publish": [
       {

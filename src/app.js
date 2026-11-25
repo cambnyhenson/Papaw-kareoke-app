@@ -620,7 +620,7 @@ function openTV(){
   tv=window.open('','karaoke_tv');
   if(!tv){ toast('Could not open the TV screen.'); return; }
   tv.document.open();
-  tv.document.write(`<!DOCTYPE html><title>Karaoke – TV Screen</title><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  tv.document.write(`<!DOCTYPE html><title>The Butcher Karaoke – TV Screen</title><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}
     canvas{width:100%;height:100%;display:block}</style><canvas id="c"></canvas>
     <div id="h" style="position:fixed;left:0;right:0;bottom:20px;text-align:center;color:#888;font:18px Segoe UI,sans-serif">Double-click to go full screen</div>`);
   tv.document.close();
@@ -650,7 +650,7 @@ function drawScreen(canvas){
   c.textAlign='center'; c.fillStyle='#fff';
   if(song){ c.font=`600 ${H/12|0}px Segoe UI,sans-serif`; wrapText(c, song.item.name, W/2, H/2, W*0.9, H/10); return; }
   const n=nextItem();
-  c.fillStyle='#f2b134'; c.font=`600 ${H/10|0}px Segoe UI,sans-serif`; c.fillText('🎤 Karaoke', W/2, H*0.38);
+  c.fillStyle='#f2b134'; c.font=`600 ${H/10|0}px Segoe UI,sans-serif`; c.fillText('🎤 The Butcher Karaoke', W/2, H*0.38);
   if(n){ c.fillStyle='#fff'; c.font=`${H/18|0}px Segoe UI,sans-serif`; c.fillText('Up next', W/2, H*0.55);
     c.fillStyle='#fff'; c.font=`600 ${H/14|0}px Segoe UI,sans-serif`; wrapText(c, n.name, W/2, H*0.66, W*0.9, H/12); }
 }
@@ -694,7 +694,7 @@ renderPlaylist(); updateKeyUI(); listOutputs(); listInputs(); updateRecUI();
   await loadIndex();
   if(!folders.length){ $('btnFolder').click(); } else rescan(null,true);   // opens instantly, then checks for new songs
   if(await window.api.hasTV()) openTV();   // TV plugged in: put lyrics screen on it right away
-  document.title='Karaoke Player '+(await window.api.version());
+  document.title='The Butcher Karaoke '+(await window.api.version());
 })();
 /* ================= UPDATES =================
    New versions download in the background from GitHub. They install when the app is closed,

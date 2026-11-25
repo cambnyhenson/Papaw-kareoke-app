@@ -1,4 +1,4 @@
-# Karaoke Player
+# The Butcher Karaoke
 
 A simple Windows karaoke show player built for one person: Grandpa.
 
@@ -18,7 +18,7 @@ A simple Windows karaoke show player built for one person: Grandpa.
 
 ## Using it
 
-1. Download `Karaoke-Player-Setup-x.y.z.exe` from the **Releases** page and run it.
+1. Download `The-Butcher-Karaoke-Setup-x.y.z.exe` from the **Releases** page and run it.
    After that the app **updates itself**: it checks GitHub every couple of hours, downloads new
    versions quietly, and installs them when the app is closed (never mid-song).
    Windows may show "Windows protected your PC" because the app isn't code-signed:
