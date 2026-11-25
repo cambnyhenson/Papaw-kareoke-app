@@ -96,3 +96,6 @@ button.rec.on{background:var(--red);border-color:var(--red);color:#FFF}
 .mhelp{margin:0;font-size:15px}
 .modal .list{border:1px solid var(--line);border-radius:4px;min-height:80px;max-height:40vh}
 .mrow{display:flex;align-items:center;gap:10px;font-weight:600}
+button.report{border-color:#000}
+button.report.alert{background:var(--red);border-color:var(--red);color:#FFF}
+textarea{font:inherit;width:100%;padding:10px 12px;border:1px solid #000;border-radius:4px;resize:vertical;color:#000}

@@ -3,7 +3,7 @@
 const $ = id => document.getElementById(id);
 const fmt = s => { s = Math.max(0, s|0); return (s/60|0) + ':' + String(s%60).padStart(2,'0'); };
 let msgTimer;
-function toast(t, ms=4000){ const m=$('msg'); m.textContent=t; m.style.display='block'; clearTimeout(msgTimer); msgTimer=setTimeout(()=>m.style.display='none', ms); }
+function toast(t, ms=4000){ try{ window.api.log('ui', t); }catch(e){} const m=$('msg'); m.textContent=t; m.style.display='block'; clearTimeout(msgTimer); msgTimer=setTimeout(()=>m.style.display='none', ms); }
 function busy(on, text='Loading…'){ $('busy').textContent=text; $('busy').style.display=on?'flex':'none'; }
 
 /* ================= AUDIO ENGINE =================
@@ -237,6 +237,7 @@ async function rescan(id, quietIfNoChange){
   try{
     const before=libList.length, {added,removed}=await window.api.libScan(id);
     await loadIndex();
+    window.api.log('info','scan done: '+libList.length+' songs, +'+added+'/-'+removed+' files, folders: '+folders.map(f=>f.name+(f.online?'':' (offline)')).join(', '));
     const diff=libList.length-before;
     if(added||removed) toast(diff>0 ? 'Library updated: '+diff.toLocaleString()+' new songs' : diff<0 ? 'Library updated: '+(-diff).toLocaleString()+' songs no longer found' : 'Library updated',5000);
     else if(!quietIfNoChange) toast('Library is up to date',2500);
@@ -345,6 +346,7 @@ async function playItem(it){
   if(!s.online){ toast('That song is on a drive that isn’t plugged in.'); return; }
   stopSong(true);
   busy(true,'Loading '+s.name+'…');
+  window.api.log('info', 'play: '+s.name+' ['+s.type+'] key '+it.key+' — '+s.path);
   try{
     let buf=null, cdgBytes=null, kind='cdg', videoAudio='engine';
     if(s.type==='zip'){
@@ -376,6 +378,7 @@ async function playItem(it){
     play();
   }catch(e){
     busy(false); song=null; currentId=null; renderPlaylist();
+    window.api.log('error', 'could not play '+s.path+': '+(e&&e.stack||e));
     toast('Could not play "'+s.name+'": '+e.message, 6000);
   }
 }
@@ -448,7 +451,7 @@ async function applyOutput(){
   try{ if(video.setSinkId) await video.setSinkId(id); }catch(e){}
   try{ if(recAudio.setSinkId) await recAudio.setSinkId(id); }catch(e){}
 }
-$('outDev').onchange=()=>{ const o=$('outDev').selectedOptions[0]; localStorage.setItem('kp.outLabel', o.value? o.textContent : ''); $('outDev').title='Pick the mixer here'; applyOutput(); };
+$('outDev').onchange=()=>{ const o=$('outDev').selectedOptions[0]; window.api.log('info','sound to: '+o.textContent); localStorage.setItem('kp.outLabel', o.value? o.textContent : ''); $('outDev').title='Pick the mixer here'; applyOutput(); };
 if(navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', ()=>{ listOutputs(); listInputs(); });
 
 /* ================= RECORDING =================
@@ -468,7 +471,7 @@ async function listInputs(){
   sel.value = match ? match.deviceId : '';
   if(sel.value!==before || !rec.stream) openInput();
 }
-$('inDev').onchange=()=>{ const o=$('inDev').selectedOptions[0]; localStorage.setItem('kp.inLabel', o.value? o.textContent : ''); openInput(); };
+$('inDev').onchange=()=>{ const o=$('inDev').selectedOptions[0]; window.api.log('info','record from: '+o.textContent); localStorage.setItem('kp.inLabel', o.value? o.textContent : ''); openInput(); };
 
 async function openInput(){
   closeInput();
@@ -514,7 +517,7 @@ async function finishSave(bytes){
   const job=rec.pending.shift(); if(!job || !job.keep) return;
   try{ const name=await window.api.recSave(job.title, bytes); toast('Recording saved: '+name, 5000);
     if($('recView').style.display!=='none') showRecordings(); }
-  catch(e){ toast('Could not save the recording: '+e.message, 8000); }
+  catch(e){ noteError('could not save recording: '+(e.stack||e)); toast('Could not save the recording: '+e.message, 8000); }
 }
 function updateRecUI(){
   $('btnRec').classList.toggle('on', rec.armed);
@@ -662,6 +665,36 @@ window.api.onUpdateReady(v=>{
 $('btnUpdate').onclick=()=>{
   if(song && isPlaying() && !confirm('A song is playing. Stop it and restart to update now?')) return;
   stopSong(); window.api.installUpdate();
+};
+
+/* ================= PROBLEM REPORTS ================= */
+let errorCount=0;
+function noteError(msg){
+  errorCount++; window.api.log('error', msg);
+  $('btnReport').classList.add('alert'); $('btnReport').textContent='⚠ Report a Problem ('+errorCount+')';
+}
+window.addEventListener('error', e=>noteError('page error: '+(e.error&&e.error.stack||e.message)+' @ '+e.filename+':'+e.lineno));
+window.addEventListener('unhandledrejection', e=>noteError('page error (promise): '+(e.reason&&e.reason.stack||e.reason)));
+window.__kpState=()=>({
+  songs: libList.length,
+  folders: folders.map(f=>({name:f.name, online:f.online, files:f.count})),
+  playing: song ? {name:song.item.name, kind:song.kind, key:song.item.key, at:Math.round(pos())+'s of '+Math.round(dur())+'s'} : null,
+  playlist: playlist.length, soundTo: $('outDev').selectedOptions[0]?.textContent, recordFrom: $('inDev').selectedOptions[0]?.textContent,
+  recording: rec.active, recordArmed: rec.armed, outputRate: engine.ctx ? engine.ctx.sampleRate : null,
+  tvOpen: !!(tv && !tv.closed), errorsThisSession: errorCount,
+});
+$('btnReport').onclick=()=>{ $('reportText').value=''; $('reportStatus').textContent=''; $('btnReportSend').disabled=false; $('reportModal').style.display='flex'; $('reportText').focus(); };
+$('btnReportCancel').onclick=()=>{ $('reportModal').style.display='none'; };
+$('btnLogs').onclick=()=>window.api.openLogs();
+$('btnReportSend').onclick=async()=>{
+  $('btnReportSend').disabled=true; $('reportStatus').textContent='Sending…';
+  const r=await window.api.sendReport({ description:$('reportText').value.trim(), state:window.__kpState(), kind:'report' });
+  if(r.ok){ $('reportStatus').textContent='✓ Sent. Thank you!'; errorCount=0; $('btnReport').classList.remove('alert'); $('btnReport').textContent='⚠ Report a Problem';
+    setTimeout(()=>{ $('reportModal').style.display='none'; },1500); }
+  else { $('reportStatus').textContent = /not set up/.test(r.reason||'')
+      ? 'Saved on this computer. (Sending isn’t set up in this version yet; it will go out after the next update.)'
+      : 'Saved. It will send automatically next time there is internet.';
+    $('btnReportSend').disabled=false; }
 };
 
 window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec};

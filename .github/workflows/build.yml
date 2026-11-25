@@ -34,6 +34,19 @@ jobs:
           ver="$base.${{ github.run_number }}"
           npm version "$ver" --no-git-tag-version
           echo "version=$ver" >> "$GITHUB_OUTPUT"
+      # Problem reports: the REPORT_TOKEN repo secret (fine-grained token, this repo only,
+      # Issues: read & write) is baked into the app so it can file issues. Skipped if not set.
+      - name: Add problem-report key
+        shell: bash
+        env:
+          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
+        run: |
+          if [ -n "$REPORT_TOKEN" ]; then
+            node -e "require('fs').writeFileSync('report.json', JSON.stringify({owner:'cambnyhenson',repo:'Papaw-kareoke-app',token:process.env.REPORT_TOKEN}))"
+            echo "Problem reports enabled"
+          else
+            echo "::warning::REPORT_TOKEN secret not set - Report a Problem will save reports but cannot send them"
+          fi
       # Build only; latest.yml (what installed apps read to find updates) is written to dist/.
       - name: Build installer
         run: npx electron-builder --win --publish never

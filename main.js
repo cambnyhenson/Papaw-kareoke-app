@@ -3,6 +3,8 @@ const { app, BrowserWindow, ipcMain, dialog, screen, session, shell } = require(
 const path = require('path');
 const fs = require('fs/promises');
 const { autoUpdater } = require('electron-updater');
+const reports = require('./reports');
+const { log } = reports;
 
 let win = null;
 
@@ -51,6 +53,24 @@ function createWindow() {
   });
 
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+
+  // Log the page's own errors, and recover from crashes with an offer to send a report.
+  win.webContents.on('console-message', (e, level, message, line, source) => {
+    const lv = e && e.level !== undefined ? e.level : level, msg = e && e.message !== undefined ? e.message : message;
+    if (lv === 'error' || lv === 3 || lv === 'warning' || lv === 2) log(lv === 'error' || lv === 3 ? 'page-error' : 'page-warn', msg);
+  });
+  win.webContents.on('render-process-gone', async (_e, details) => {
+    log('crash', 'screen process gone:', details);
+    if (details.reason === 'clean-exit') return;
+    const r = await dialog.showMessageBox(win, { type: 'error', title: 'Karaoke Player',
+      message: 'Karaoke Player had a problem and needs to reload.',
+      detail: 'Send a report so it can be fixed? (Takes a second; the playlist is kept.)',
+      buttons: ['Send report and reload', 'Just reload'], defaultId: 0, noLink: true });
+    if (r.response === 0) await reports.send({ kind: 'crash', error: 'Screen process ' + details.reason + ' (exit code ' + details.exitCode + ')' });
+    if (win) win.reload();
+  });
+  win.on('unresponsive', () => log('warn', 'window not responding'));
+  win.on('responsive', () => log('info', 'window responding again'));
   win.on('closed', () => { win = null; app.quit(); });
 }
 
@@ -74,6 +94,29 @@ ipcMain.handle('lib-scan', (e, id) => {
   return scanning;
 });
 ipcMain.handle('read', async (_e, key) => fs.readFile(await library.fullPath(key)));
+
+/* ---------- logging & problem reports ---------- */
+ipcMain.handle('log', (_e, level, msg) => log(level, msg));
+ipcMain.handle('report-send', (_e, opts) => reports.send(opts));
+ipcMain.handle('report-configured', () => reports.configured());
+ipcMain.handle('open-logs', () => shell.openPath(reports.logDir()));
+
+let crashing = false;
+process.on('uncaughtException', async err => {
+  log('crash', 'main process:', err);
+  if (crashing || !app.isReady()) return; crashing = true;
+  const r = await dialog.showMessageBox(win || undefined, { type: 'error', title: 'Karaoke Player',
+    message: 'Karaoke Player hit a problem.', detail: 'Send a report so it can be fixed?',
+    buttons: ['Send report', 'Close'], defaultId: 0, noLink: true });
+  if (r.response === 0) {
+    let state = {};
+    try { state = await win.webContents.executeJavaScript('window.__kpState ? window.__kpState() : {}'); } catch {}
+    await reports.send({ kind: 'crash', error: err.stack || String(err), state });
+  }
+  crashing = false;
+});
+process.on('unhandledRejection', err => log('error', 'main process (promise):', err));
+app.on('child-process-gone', (_e, d) => log('warn', 'helper process gone:', d));
 
 /* ---------- recordings (Documents\Karaoke Recordings) ---------- */
 const recDir = () => path.join(app.getPath('documents'), 'Karaoke Recordings');
@@ -115,8 +158,8 @@ function setupUpdates() {
   if (!app.isPackaged) return;            // only the installed app updates itself
   autoUpdater.autoDownload = true;        // download quietly in the background
   autoUpdater.autoInstallOnAppQuit = true; // install when the app is closed, never mid-song
-  autoUpdater.on('update-downloaded', info => { if (win) win.webContents.send('update-ready', info.version); });
-  autoUpdater.on('error', e => console.error('update check failed:', e && e.message));
+  autoUpdater.on('update-downloaded', info => { log('info', 'update downloaded:', info.version); if (win) win.webContents.send('update-ready', info.version); });
+  autoUpdater.on('error', e => log('warn', 'update check failed:', e && e.message));
   const check = () => autoUpdater.checkForUpdates().catch(() => {}); // offline is fine
   setTimeout(check, 5000);
   setInterval(check, 2 * 60 * 60 * 1000);
@@ -128,8 +171,10 @@ app.whenReady().then(() => {
   const allowed = new Set(['media', 'speaker-selection', 'fullscreen']);
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
+  log('info', `--- Karaoke Player ${app.getVersion()} starting (Windows ${require('os').release()}, ${screen.getAllDisplays().length} display(s))`);
   createWindow();
   setupUpdates();
+  setTimeout(() => reports.sendPending(), 20000); // reports saved while offline
 });
 
 app.on('window-all-closed', () => app.quit());

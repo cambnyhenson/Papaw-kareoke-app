@@ -21,6 +21,7 @@
       <select id="inDev" title="Pick the mixer here"><option value="">— none —</option></select>
       <div class="meter" title="Input level"><div id="meterFill"></div></div>
     </div>
+    <button class="report" id="btnReport" title="Send a problem report so it can be fixed">⚠ Report a Problem</button>
     <div class="status" id="status">No song folder loaded</div>
     <div class="update" id="update" style="flex-basis:100%"><span id="updateText"></span><button class="primary" id="btnUpdate">Restart and update now</button></div>
   </header>
@@ -96,6 +97,20 @@
     <div class="mrow">File names look like:
       <select id="nameOrder"><option value="at">Artist - Title</option><option value="ta">Title - Artist</option></select></div>
     <div class="mrow" style="justify-content:flex-end"><button id="btnCloseFolders">Done</button></div>
+  </div>
+</div>
+<div class="modal" id="reportModal" style="display:none">
+  <div class="box">
+    <h3>Report a Problem</h3>
+    <p class="mhelp">This sends what went wrong, plus the app's log, so it can be fixed. No songs or recordings are sent.</p>
+    <label class="mrow" for="reportText">What happened? (optional)</label>
+    <textarea id="reportText" rows="5" placeholder="Example: I picked a song and it skipped to the next one."></textarea>
+    <div class="mrow" id="reportStatus"></div>
+    <div class="mrow" style="justify-content:flex-end">
+      <button id="btnLogs">Open Log Folder</button>
+      <button id="btnReportCancel">Cancel</button>
+      <button class="primary" id="btnReportSend">Send Report</button>
+    </div>
   </div>
 </div>
 <div class="msg" id="msg"></div>

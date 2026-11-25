@@ -19,6 +19,8 @@
       "main.js",
       "preload.js",
       "library.js",
+      "report.json",
+      "reports.js",
       "src/**/*",
       "build/icon.png"
     ],
