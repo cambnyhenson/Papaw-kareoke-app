@@ -28,4 +28,5 @@ contextBridge.exposeInMainWorld('api', {
   tvFullscreen: () => ipcRenderer.invoke('tv-fullscreen'),
   onTvChanged: cb => ipcRenderer.on('tv-changed', (_e, connected) => cb(connected)),
   keepAwake: on => ipcRenderer.invoke('keep-awake', on),
+  onOpenGuide: cb => ipcRenderer.on('open-guide', () => cb()),
 });

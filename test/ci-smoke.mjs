@@ -56,6 +56,16 @@ check(await pg.inputValue('#reportText') === 'two words', 'spaces can be typed i
 await pg.keyboard.press('Escape');
 check(!(await pg.isVisible('#reportModal')), 'Escape closes the report box');
 
+await pg.click('#btnGuide');
+check(await pg.isVisible('#guideModal'), 'User Guide opens from the bottom bar');
+await pg.click('#guideToc a[href="#g-record"]'); await pg.waitForTimeout(600);
+check(pg.url().endsWith('index.html') && await pg.isVisible('#g-record'), 'guide contents links jump inside the guide');
+await pg.keyboard.press('Escape');
+check(!(await pg.isVisible('#guideModal')), 'Escape closes the guide');
+await pg.keyboard.press('F1');
+check(await pg.isVisible('#guideModal'), 'F1 opens the guide');
+await pg.click('#btnGuideClose');
+
 const before = pg.url();
 await pg.evaluate(() => { location.href = 'file:///C:/Windows/win.ini'; });
 await pg.waitForTimeout(800);

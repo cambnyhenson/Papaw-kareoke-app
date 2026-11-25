@@ -210,6 +210,8 @@ function buildMenu() {
       { type: 'separator' }, { role: 'togglefullscreen' },
     ] },
     { label: 'Help', submenu: [
+      { label: 'User Guide', accelerator: 'F1', click: () => { if (win) win.webContents.send('open-guide'); } },
+      { type: 'separator' },
       { label: 'Open Log Folder', click: () => shell.openPath(reports.logDir()) },
       { label: `Version ${app.getVersion()}`, enabled: false },
     ] },

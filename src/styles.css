@@ -99,3 +99,14 @@ button.rec.on{background:var(--red);border-color:var(--red);color:#FFF}
 button.report{border-color:#000}
 button.report.alert{background:var(--red);border-color:var(--red);color:#FFF}
 textarea{font:inherit;width:100%;padding:10px 12px;border:1px solid #000;border-radius:4px;resize:vertical;color:#000}
+button.guide{margin-left:auto}
+.modal .box.guidebox{width:min(980px,94vw);height:88vh;max-height:88vh;padding:0;gap:0}
+.guidehead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:2px solid #000}
+.toc{display:flex;flex-wrap:wrap;gap:6px 8px;padding:10px 18px;border-bottom:1px solid var(--line)}
+.toc a{color:#000;font-weight:600;font-size:15px;padding:3px 10px;border:1px solid #000;border-radius:4px;text-decoration:none}
+.toc a:hover{background:#111;color:#FFF}
+.guide{overflow:auto;padding:6px 24px 30px;font-size:18px;line-height:1.55}
+.guide h4{font-size:22px;margin:22px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.guide p{margin:8px 0}
+.guide li{margin:6px 0}
+.guide table.keys td{padding:6px 18px 6px 0;font-size:18px}

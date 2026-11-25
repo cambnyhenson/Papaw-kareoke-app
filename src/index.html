@@ -84,6 +84,7 @@
         </div>
         <div class="vol">🔊 <input type="range" id="vol" min="0" max="100" value="100"></div>
         <label class="chk"><input type="checkbox" id="auto"> Auto-play next song</label>
+        <button class="big guide" id="btnGuide" title="How to use Karaoke Player (F1)">📖 User Guide</button>
       </div>
     </div>
   </footer>
@@ -110,6 +111,125 @@
       <button id="btnLogs">Open Log Folder</button>
       <button id="btnReportCancel">Cancel</button>
       <button class="primary" id="btnReportSend">Send Report</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="guideModal" style="display:none">
+  <div class="box guidebox" role="dialog" aria-labelledby="guideTitle">
+    <div class="guidehead">
+      <h3 id="guideTitle">📖 Karaoke Player User Guide</h3>
+      <button class="primary" id="btnGuideClose">Close</button>
+    </div>
+    <nav class="toc" id="guideToc">
+      <a href="#g-start">Getting started</a><a href="#g-sing">Singing a song</a><a href="#g-key">Changing the key</a>
+      <a href="#g-tv">The TV screen</a><a href="#g-record">Recording</a><a href="#g-recordings">Listening to recordings</a>
+      <a href="#g-songs">Song folders and the drive</a><a href="#g-search">Finding songs</a><a href="#g-text">Bigger text</a>
+      <a href="#g-problems">If something goes wrong</a><a href="#g-updates">Updates</a><a href="#g-keys">Keyboard shortcuts</a>
+    </nav>
+    <div class="guide" id="guideBody">
+
+<section id="g-start"><h4>Getting started (one time)</h4>
+<ol>
+<li><b>Plug in</b> the mixer's USB cable and the song drive, and connect the TV, <b>before</b> opening Karaoke Player.</li>
+<li>Open <b>Karaoke Player</b> from the desktop.</li>
+<li>The first time, the <b>Song Folders</b> box opens. Click <b>+ Add Folder</b>, pick the song drive (or the karaoke folder on it), and wait while it reads the songs. On a big drive this takes a few minutes, <b>only the first time</b>. Then click <b>Done</b>.</li>
+<li>At the top, next to <b>Sound to:</b>, pick the <b>mixer</b>. That sends the music to the mixer.</li>
+<li>Next to <b>Record from:</b>, pick the <b>mixer</b> too. The little bar next to it moves when someone talks into the mic.</li>
+</ol>
+<p>The app remembers all of this. Next time, just open it.</p></section>
+
+<section id="g-sing"><h4>Singing a song</h4>
+<ol>
+<li>Type part of the song or the singer's name in the <b>search box</b> on the left, for example <i>patsy crazy</i>.</li>
+<li>Click <b>Add</b> next to the song. It goes onto the <b>Playlist</b> on the right.</li>
+<li>Click <b>▶</b> next to the song on the Playlist to start it. The words show on the TV.</li>
+</ol>
+<p>The buttons at the bottom:</p>
+<ul>
+<li><b>▶ / ❚❚</b> play or pause. The <b>space bar</b> does the same.</li>
+<li><b>■</b> stops the song.</li>
+<li><b>⏭</b> plays the next song on the Playlist.</li>
+<li>Click anywhere on the <b>long bar</b> to jump to that part of the song.</li>
+<li>The <b>🔊 slider</b> is the volume.</li>
+<li><b>Auto-play next song</b>: when checked, the next song starts by itself when one finishes.</li>
+</ul>
+<p>On the Playlist, <b>▲ ▼</b> move a song up or down, and <b>✕</b> takes it off. Songs that have been sung get a ✓ and a line through them. <b>Clear Sung</b> removes those; <b>Clear All</b> empties the list. The Playlist is saved, even if the computer is turned off.</p></section>
+
+<section id="g-key"><h4>Changing the key</h4>
+<p>While a song is playing, press <b>♯ +</b> to raise it or <b>♭ −</b> to lower it, one step at a time (up to 6 each way). The speed stays the same.</p>
+<p>The app remembers the key for that song on the Playlist, shown as <b>Key +2</b> and so on. <b>0</b> is the original key.</p>
+<p>A few video songs can't change key; the buttons are greyed out for those.</p></section>
+
+<section id="g-tv"><h4>The TV screen</h4>
+<p>If the TV is connected when the app opens, the words show on it automatically, full screen.</p>
+<ul>
+<li>If the TV screen isn't showing, click <b>📺 TV Screen</b> at the top.</li>
+<li><b>Double-click</b> the TV picture to switch full screen on or off.</li>
+<li>Between songs, the TV shows who's <b>Up next</b>.</li>
+<li>If the TV cable comes out, the TV screen closes so it doesn't cover the controls. Plug it back in and it comes back by itself.</li>
+</ul></section>
+
+<section id="g-record"><h4>Recording</h4>
+<ol>
+<li>Make sure <b>Record from:</b> is set to the mixer and the little bar moves when someone talks into the mic.</li>
+<li>Click <b>● REC</b> so it turns red and says <b>REC ON</b>.</li>
+<li>Play a song. It records from start to finish. You'll see <b>● REC</b> and a timer next to the song name.</li>
+</ol>
+<p>When the song ends, is stopped, or the next one starts, the recording is saved by itself. Every song played while REC is on gets recorded. Click <b>● REC ON</b> again to turn recording off.</p>
+<p>The recording is what the mixer hears: the singer and the music together. If the voice is too quiet in the recording, turn the music down a little on the mixer.</p>
+<p>Recordings are saved in <b>Documents › Karaoke Recordings</b>, named with the song and the date.</p></section>
+
+<section id="g-recordings"><h4>Listening to recordings</h4>
+<p>Click the <b>Recordings</b> tab (next to Song Library). Newest recordings are at the top.</p>
+<ul>
+<li><b>▶</b> plays it; <b>■</b> stops it.</li>
+<li><b>📂</b> shows the file in its folder, for copying or sending it to family.</li>
+<li><b>🗑</b> deletes it. It goes to the Recycle Bin, so it can still be brought back.</li>
+<li><b>Open Folder</b> opens the whole recordings folder.</li>
+</ul></section>
+
+<section id="g-songs"><h4>Song folders and the drive</h4>
+<p>Click <b>📁 Song Folders</b> at the top.</p>
+<ul>
+<li><b>+ Add Folder</b> adds another folder or drive. All songs show together in one list.</li>
+<li><b>Check for New Songs</b> looks for songs that were just copied on. The app also does this by itself every time it opens.</li>
+<li><b>Remove</b> takes a folder out of the list. It does <b>not</b> delete any songs.</li>
+<li>🟢 means connected. ⚪ means that drive isn't plugged in.</li>
+</ul>
+<p>If the drive isn't plugged in, a red <b>⚠ Not plugged in</b> note shows at the top and those songs are marked. Plug it in and they come back within a few seconds. It doesn't matter which USB port you use.</p>
+<p>Songs that play: <b>MP3+G zip</b> files, <b>MP3 with a matching CDG</b> file, and <b>MP4</b> videos. Old <b>AVI</b> or <b>MPG</b> videos won't play.</p></section>
+
+<section id="g-search"><h4>Finding songs</h4>
+<ul>
+<li>Type any part of the song name, the singer, or the disc number (like <i>SC8123</i>). More words narrow it down.</li>
+<li><b>Sort: Artist / Title</b> changes the order of the list.</li>
+<li><b>Double-click</b> a song to add it to the Playlist.</li>
+<li>If song names show backwards (singer where the title should be), open <b>📁 Song Folders</b> and change <b>File names look like</b>.</li>
+</ul></section>
+
+<section id="g-text"><h4>Bigger text</h4>
+<p>Hold <b>Ctrl</b> and press <b>+</b> to make everything bigger, <b>Ctrl</b> and <b>−</b> to make it smaller, and <b>Ctrl</b> and <b>0</b> to go back to normal. Or press <b>Alt</b> and use the <b>View</b> menu.</p></section>
+
+<section id="g-problems"><h4>If something goes wrong</h4>
+<p><b>Click ⚠ Report a Problem</b> at the top. Type what happened if you can (it's okay to leave it blank) and click <b>Send Report</b>. It goes to Camby with the details needed to fix it. If the button turns <b>red</b>, the app noticed a problem by itself; please send a report.</p>
+<p><b>No sound:</b> check <b>Sound to:</b> is set to the mixer, the mixer is on, and its USB cable is plugged in. The volume slider at the bottom should be turned up.</p>
+<p><b>The mixer isn't in the list:</b> plug its USB cable in, wait a few seconds, and look again. If it still isn't there, close the app and open it again.</p>
+<p><b>No words on the TV:</b> click <b>📺 TV Screen</b>. Check the TV is on and set to the right input.</p>
+<p><b>A song won't play:</b> a message says why. Try another version of the song if there is one, and send a report.</p>
+<p><b>The app closed or froze:</b> open it again. The Playlist is saved. If it asks to send a report, click <b>Send report</b>.</p>
+<p>When the app closes during a recording, it saves the recording first. That can take a few seconds.</p></section>
+
+<section id="g-updates"><h4>Updates</h4>
+<p>The app updates itself. New versions download in the background. A <b>yellow bar</b> at the top says when one is ready, and it installs the next time the app is closed, so it never interrupts a song. Click <b>Restart and update now</b> to install it right away.</p></section>
+
+<section id="g-keys"><h4>Keyboard shortcuts</h4>
+<table class="keys">
+<tr><td><b>Space</b></td><td>Play / pause</td></tr>
+<tr><td><b>F1</b></td><td>Open this guide</td></tr>
+<tr><td><b>Esc</b></td><td>Close a box like this one</td></tr>
+<tr><td><b>Ctrl +</b> / <b>Ctrl −</b> / <b>Ctrl 0</b></td><td>Bigger / smaller / normal text</td></tr>
+</table></section>
+
     </div>
   </div>
 </div>

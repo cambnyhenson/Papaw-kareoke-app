@@ -447,9 +447,11 @@ function changeKey(d){ const it=current(); if(!it||usesElement()) return; it.key
 $('keyUp').onclick=()=>changeKey(1); $('keyDown').onclick=()=>changeKey(-1);
 
 const typing = t => t && (t.tagName==='TEXTAREA' || t.tagName==='SELECT' || t.isContentEditable || (t.tagName==='INPUT' && t.type==='text'));
-const modalOpen = () => ['foldersModal','reportModal'].some(id=>$(id).style.display!=='none');
+const MODALS=['foldersModal','reportModal','guideModal'];
+const modalOpen = () => MODALS.some(id=>$(id).style.display!=='none');
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ for(const id of ['foldersModal','reportModal']) $(id).style.display='none'; return; }
+  if(e.key==='Escape'){ for(const id of MODALS) $(id).style.display='none'; return; }
+  if(e.key==='F1'){ e.preventDefault(); openGuide(); return; }
   if(typing(e.target) || modalOpen()) return;
   if(e.code==='Space'){ e.preventDefault(); if(song) $('btnPlay').click(); }
 });
@@ -732,5 +734,18 @@ $('btnReportSend').onclick=async()=>{
       : 'Saved. It will send automatically next time there is internet.';
     $('btnReportSend').disabled=false; }
 };
+
+/* ================= USER GUIDE ================= */
+function openGuide(section){
+  $('guideModal').style.display='flex';
+  const el = section && document.getElementById(section);
+  if(el) el.scrollIntoView(); else $('guideBody').scrollTop=0;
+}
+$('btnGuide').onclick=()=>openGuide();
+$('btnGuideClose').onclick=()=>{ $('guideModal').style.display='none'; };
+// table of contents links scroll inside the guide (never navigate the window)
+$('guideToc').addEventListener('click', e=>{ const a=e.target.closest('a'); if(!a) return; e.preventDefault();
+  document.getElementById(a.getAttribute('href').slice(1)).scrollIntoView({behavior:'smooth'}); });
+window.api.onOpenGuide && window.api.onOpenGuide(()=>openGuide());
 
 window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec};
