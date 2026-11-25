@@ -609,7 +609,7 @@ function drawScreen(canvas){
   if(song){ c.font=`600 ${H/12|0}px Segoe UI,sans-serif`; wrapText(c, song.item.name, W/2, H/2, W*0.9, H/10); return; }
   const n=nextItem();
   c.fillStyle='#f2b134'; c.font=`600 ${H/10|0}px Segoe UI,sans-serif`; c.fillText('🎤 Karaoke', W/2, H*0.38);
-  if(n){ c.fillStyle='#aaa'; c.font=`${H/18|0}px Segoe UI,sans-serif`; c.fillText('Up next', W/2, H*0.55);
+  if(n){ c.fillStyle='#fff'; c.font=`${H/18|0}px Segoe UI,sans-serif`; c.fillText('Up next', W/2, H*0.55);
     c.fillStyle='#fff'; c.font=`600 ${H/14|0}px Segoe UI,sans-serif`; wrapText(c, n.name, W/2, H*0.66, W*0.9, H/12); }
 }
 function wrapText(c, t, x, y, maxW, lh){
@@ -652,4 +652,16 @@ renderPlaylist(); updateKeyUI(); listOutputs(); listInputs(); updateRecUI();
   if(await window.api.hasTV()) openTV();   // TV plugged in: put lyrics screen on it right away
   document.title='Karaoke Player '+(await window.api.version());
 })();
+/* ================= UPDATES =================
+   New versions download in the background from GitHub. They install when the app is closed,
+   so an update never interrupts a song. "Restart and update now" installs right away. */
+window.api.onUpdateReady(v=>{
+  $('updateText').textContent='A new version ('+v+') is ready. It installs automatically next time the app is closed.';
+  $('update').style.display='flex';
+});
+$('btnUpdate').onclick=()=>{
+  if(song && isPlaying() && !confirm('A song is playing. Stop it and restart to update now?')) return;
+  stopSong(); window.api.installUpdate();
+};
+
 window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec};

@@ -1,13 +1,20 @@
-name: Build Windows app
+name: Build and release Windows app
+
+# Every push to main builds the installer and publishes it as a public GitHub Release.
+# Installed copies of the app check those releases and update themselves.
+# Version = major.minor from package.json + this workflow's run number, so every build is newer.
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -19,13 +26,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run dist
+      - name: Set version
+        shell: bash
+        run: |
+          base=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          npm version "$base.${{ github.run_number }}" --no-git-tag-version
+          echo "Building version $base.${{ github.run_number }}"
+      - name: Build and publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always
       - uses: actions/upload-artifact@v4
         with:
           name: Karaoke-Player-Windows
           path: dist/*.exe
-      - name: Publish release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.exe

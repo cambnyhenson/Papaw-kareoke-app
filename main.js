@@ -2,6 +2,7 @@
 const { app, BrowserWindow, ipcMain, dialog, screen, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
+const { autoUpdater } = require('electron-updater');
 
 let win = null;
 
@@ -109,12 +110,26 @@ ipcMain.handle('rec-folder', async () => { await fs.mkdir(recDir(), { recursive:
 ipcMain.handle('has-tv', () => tvDisplay().external);
 ipcMain.handle('version', () => app.getVersion());
 
+/* ---------- automatic updates from GitHub Releases ---------- */
+function setupUpdates() {
+  if (!app.isPackaged) return;            // only the installed app updates itself
+  autoUpdater.autoDownload = true;        // download quietly in the background
+  autoUpdater.autoInstallOnAppQuit = true; // install when the app is closed, never mid-song
+  autoUpdater.on('update-downloaded', info => { if (win) win.webContents.send('update-ready', info.version); });
+  autoUpdater.on('error', e => console.error('update check failed:', e && e.message));
+  const check = () => autoUpdater.checkForUpdates().catch(() => {}); // offline is fine
+  setTimeout(check, 5000);
+  setInterval(check, 2 * 60 * 60 * 1000);
+}
+ipcMain.handle('update-install', () => autoUpdater.quitAndInstall(true, true));
+
 app.whenReady().then(() => {
   // Allow the page to list sound outputs by name and send audio to a chosen one (the mixer).
   const allowed = new Set(['media', 'speaker-selection', 'fullscreen']);
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
   createWindow();
+  setupUpdates();
 });
 
 app.on('window-all-closed', () => app.quit());

@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('api', {
   read: key => ipcRenderer.invoke('read', key),     // -> Uint8Array
   hasTV: () => ipcRenderer.invoke('has-tv'),
   version: () => ipcRenderer.invoke('version'),
+  onUpdateReady: cb => ipcRenderer.on('update-ready', (_e, v) => cb(v)),
+  installUpdate: () => ipcRenderer.invoke('update-install'),
   recSave: (title, bytes) => ipcRenderer.invoke('rec-save', title, bytes),
   recList: () => ipcRenderer.invoke('rec-list'),
   recRead: name => ipcRenderer.invoke('rec-read', name),

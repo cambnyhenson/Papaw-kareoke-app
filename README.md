@@ -18,7 +18,9 @@ A simple Windows karaoke show player built for one person: Grandpa.
 
 ## Using it
 
-1. Run `Karaoke-Player-Setup-x.y.z.exe` (or the portable `.exe`, which needs no install).
+1. Download `Karaoke-Player-Setup-x.y.z.exe` from the **Releases** page and run it.
+   After that the app **updates itself**: it checks GitHub every couple of hours, downloads new
+   versions quietly, and installs them when the app is closed (never mid-song).
    Windows may show "Windows protected your PC" because the app isn't code-signed:
    click **More info → Run anyway**.
 2. **📁 Song Folders → + Add Folder**: pick the karaoke drive. The first read of a big drive
