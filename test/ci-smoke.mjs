@@ -53,6 +53,11 @@ for (let i = 0; i < names.length; i++) {
 }
 await pg.click('#btnStop');
 
+await pg.click('#btnMix');
+check(await pg.isVisible('#mixPanel'), 'Rec Mix panel opens');
+await pg.keyboard.press('Escape');
+check(!(await pg.isVisible('#mixPanel')), 'Escape closes the Rec Mix panel');
+
 await pg.click('#btnReport'); await pg.click('#reportText'); await pg.keyboard.type('two words');
 check(await pg.inputValue('#reportText') === 'two words', 'spaces can be typed in the report box');
 await pg.keyboard.press('Escape');

@@ -20,12 +20,15 @@ function busy(on, text='Loading…'){ $('busy').textContent=text; $('busy').styl
    Plays through the normal Windows sound path (shared mode). Windows converts
    to whatever sample rate the mixer runs at, so 44.1k vs 48k never matters. */
 class Engine {
-  constructor(){ this.ctx=null; this.gain=null; this.buffer=null; this.semis=0; this.playing=false;
+  constructor(){ this.ctx=null; this.pre=null; this.gain=null; this.buffer=null; this.semis=0; this.playing=false;
     this.offset=0; this.node=null; this.shifter=null; this.gen=0; this.onended=null; this.volume=1; }
   ensure(){
     if(!this.ctx){
       this.ctx = new AudioContext({latencyHint:'playback'});
-      this.gain = this.ctx.createGain(); this.gain.gain.value=this.volume; this.gain.connect(this.ctx.destination);
+      // pre: the song itself (after key change). It goes to the speakers through the volume, and
+      // separately into the recording mix, so the volume slider never changes the recording.
+      this.pre = this.ctx.createGain(); this.gain = this.ctx.createGain(); this.gain.gain.value=this.volume;
+      this.pre.connect(this.gain); this.gain.connect(this.ctx.destination);
       applyOutput();
     }
     if(this.ctx.state==='suspended') this.ctx.resume();
@@ -54,7 +57,7 @@ class Engine {
     const ctx=this.ctx, gen=++this.gen;
     if(this.semis===0){
       // untouched original audio when no key change
-      const n=ctx.createBufferSource(); n.buffer=this.buffer; n.connect(this.gain);
+      const n=ctx.createBufferSource(); n.buffer=this.buffer; n.connect(this.pre);
       n.onended=()=>this.finish(gen);
       this.startedAt=ctx.currentTime; n.start(0, off); this.node=n;
     } else {
@@ -65,7 +68,7 @@ class Engine {
       const lat = 4096/ctx.sampleRate;
       this.sh={pos:off, at:ctx.currentTime+lat, lat:0};
       sh.on('play', d=>{ if(gen===this.gen) this.sh={pos:d.timePlayed, at:ctx.currentTime, lat}; });
-      sh.connect(this.gain); this.shifter=sh;
+      sh.connect(this.pre); this.shifter=sh;
     }
   }
   stopNodes(){
@@ -450,7 +453,7 @@ const typing = t => t && (t.tagName==='TEXTAREA' || t.tagName==='SELECT' || t.is
 const MODALS=['foldersModal','reportModal','guideModal'];
 const modalOpen = () => MODALS.some(id=>$(id).style.display!=='none');
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ for(const id of MODALS) $(id).style.display='none'; return; }
+  if(e.key==='Escape'){ for(const id of [...MODALS,'mixPanel']) $(id).style.display='none'; return; }
   if(e.key==='F1'){ e.preventDefault(); openGuide(); return; }
   if(typing(e.target) || modalOpen()) return;
   if(e.code==='Space'){ e.preventDefault(); if(song) $('btnPlay').click(); }
@@ -509,16 +512,28 @@ async function openInput(){
   rec.src=ctx.createMediaStreamSource(rec.stream);
   rec.analyser=ctx.createAnalyser(); rec.analyser.fftSize=1024; rec.src.connect(rec.analyser);
   rec.node=new AudioWorkletNode(ctx,'capture',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:2,channelCountMode:'explicit'});
-  rec.src.connect(rec.node);
+  // The mixer sends only the mic over USB, so the recording is built here:
+  //   mic x Mic fader  +  the song itself x Music fader (delayed to line up with the singer)  -> limiter -> MP3
+  rec.micGain=ctx.createGain(); rec.src.connect(rec.micGain);
+  rec.musicDelay=ctx.createDelay(1.0); rec.musicGain=ctx.createGain();
+  engine.pre.connect(rec.musicDelay); rec.musicDelay.connect(rec.musicGain);
+  rec.limiter=new DynamicsCompressorNode(ctx,{threshold:-6, knee:0, ratio:20, attack:0.002, release:0.15}); // no clipping if levels are pushed
+  rec.micGain.connect(rec.limiter); rec.musicGain.connect(rec.limiter);
+  rec.limiter.connect(rec.node);
+  rec.mixAnalyser=ctx.createAnalyser(); rec.mixAnalyser.fftSize=1024; rec.limiter.connect(rec.mixAnalyser);
+  try{ rec.inLatency=rec.stream.getAudioTracks()[0].getSettings().latency||0; }catch(e){ rec.inLatency=0; }
+  applyRecMix();
   rec.mute=ctx.createGain(); rec.mute.gain.value=0; rec.node.connect(rec.mute); rec.mute.connect(ctx.destination); // keeps it running, silent
   rec.node.port.onmessage=e=>{ if(rec.active) rec.worker.postMessage({type:'data', l:e.data[0], r:e.data[1]}, [e.data[0].buffer, e.data[1].buffer]); };
   rec.stream.getAudioTracks()[0].onended=()=>{ toast('The recording input was disconnected.', 6000); closeInput(); };
 }
 function closeInput(){
   stopRecording();
-  try{ rec.src&&rec.src.disconnect(); rec.node&&rec.node.disconnect(); rec.mute&&rec.mute.disconnect(); }catch(e){}
+  try{ rec.src&&rec.src.disconnect(); rec.node&&rec.node.disconnect(); rec.mute&&rec.mute.disconnect();
+    rec.micGain&&rec.micGain.disconnect(); rec.musicGain&&rec.musicGain.disconnect(); rec.limiter&&rec.limiter.disconnect();
+    if(rec.musicDelay){ try{ engine.pre.disconnect(rec.musicDelay); }catch(e){} rec.musicDelay.disconnect(); } }catch(e){}
   if(rec.stream) rec.stream.getTracks().forEach(t=>t.stop());
-  rec.stream=rec.src=rec.node=rec.analyser=rec.mute=null;
+  rec.stream=rec.src=rec.node=rec.analyser=rec.mute=rec.micGain=rec.musicGain=rec.musicDelay=rec.limiter=rec.mixAnalyser=null;
 }
 
 function startRecording(title){
@@ -572,7 +587,34 @@ function recTick(){
   if(rec.analyser){ rec.analyser.getFloatTimeDomainData(meterBuf); for(let i=0;i<meterBuf.length;i++){ const v=Math.abs(meterBuf[i]); if(v>peak) peak=v; } }
   rec.level=Math.max(peak, rec.level*0.9);
   $('meterFill').style.width=Math.min(100, rec.level*100)+'%';
+  if($('mixPanel').style.display!=='none'){
+    let mp=0; if(rec.mixAnalyser){ rec.mixAnalyser.getFloatTimeDomainData(meterBuf); for(let i=0;i<meterBuf.length;i++){ const v=Math.abs(meterBuf[i]); if(v>mp) mp=v; } }
+    rec.mixLevel=Math.max(mp,(rec.mixLevel||0)*0.9);
+    const col=v=>v>0.9?'var(--red)':v>0.7?'#C19C00':'var(--green)';
+    $('mixMeterFill').style.width=Math.min(100,rec.mixLevel*100)+'%'; $('mixMeterFill').style.background=col(rec.mixLevel);
+    $('micMeterFill').style.width=Math.min(100, rec.level*100)+'%'; $('micMeterFill').style.background=col(rec.level);
+  }
 }
+
+/* Recording mix panel: Mic and Music faders (recording only), plus timing */
+const recMix={ mic:+(localStorage.getItem('kp.recMic')||150), music:+(localStorage.getItem('kp.recMusic')||60), sync:+(localStorage.getItem('kp.recSync')||0) };
+function applyRecMix(){
+  $('mixMic').value=recMix.mic; $('mixMicVal').textContent=recMix.mic+'%';
+  $('mixMusic').value=recMix.music; $('mixMusicVal').textContent=recMix.music+'%';
+  $('mixSync').value=recMix.sync; $('mixSyncVal').textContent=(recMix.sync>0?'+':'')+recMix.sync+' ms';
+  if(!rec.micGain || !engine.ctx) return;
+  rec.micGain.gain.value=recMix.mic/100; rec.musicGain.gain.value=recMix.music/100;
+  // The singer hears the song after the speaker delay, and his voice reaches us after the input delay;
+  // delay our copy of the song by the same amount so voice and music line up. Timing slider fine-tunes it.
+  const auto=(engine.ctx.outputLatency||engine.ctx.baseLatency||0.04)+(rec.inLatency||0.02);
+  rec.musicDelay.delayTime.value=Math.max(0, Math.min(0.99, auto+recMix.sync/1000));
+}
+for(const [id,key,store] of [['mixMic','mic','kp.recMic'],['mixMusic','music','kp.recMusic'],['mixSync','sync','kp.recSync']])
+  $(id).oninput=e=>{ recMix[key]=+e.target.value; localStorage.setItem(store,recMix[key]); applyRecMix(); };
+$('btnMix').onclick=()=>{ const p=$('mixPanel'); p.style.display = p.style.display==='none' ? 'block' : 'none'; };
+$('btnMixClose').onclick=()=>{ $('mixPanel').style.display='none'; };
+$('btnMixReset').onclick=()=>{ Object.assign(recMix,{mic:150,music:60,sync:0}); for(const k of ['kp.recMic','kp.recMusic','kp.recSync']) localStorage.removeItem(k); applyRecMix(); };
+applyRecMix();
 
 /* Recordings tab */
 function showTab(which){
@@ -748,4 +790,4 @@ $('guideToc').addEventListener('click', e=>{ const a=e.target.closest('a'); if(!
   document.getElementById(a.getAttribute('href').slice(1)).scrollIntoView({behavior:'smooth'}); });
 window.api.onOpenGuide && window.api.onOpenGuide(()=>openGuide());
 
-window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec};
+window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec,recMix,applyRecMix};

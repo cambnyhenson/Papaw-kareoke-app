@@ -76,6 +76,7 @@
         <button class="big" id="btnStop" disabled>■</button>
         <button class="big" id="btnNext" title="Play the next song on the playlist">⏭</button>
         <button class="big rec" id="btnRec" title="When on, every song you play is recorded">● REC</button>
+        <button class="big" id="btnMix" title="Mic and music levels for the recording">🎚 Rec Mix</button>
         <div class="key">
           Key
           <button class="big" id="keyDown">♭ −</button>
@@ -176,7 +177,9 @@
 <li>Play a song. It records from start to finish. You'll see <b>● REC</b> and a timer next to the song name.</li>
 </ol>
 <p>When the song ends, is stopped, or the next one starts, the recording is saved by itself. Every song played while REC is on gets recorded. Click <b>● REC ON</b> again to turn recording off.</p>
-<p>The recording is what the mixer hears: the singer and the music together. If the voice is too quiet in the recording, turn the music down a little on the mixer.</p>
+<p>The recording is put together by the app: the <b>mic</b> from the mixer plus a <b>clean copy of the music</b> (in the key you picked).</p>
+<p><b>Voice too quiet or too loud in the recording?</b> Click <b>🎚 Rec Mix</b> next to REC. Move <b>🎤 Mic</b> up to make the voice louder, or <b>🎵 Music</b> down to make the music quieter. These only change the recording; the room sounds the same. The app remembers your settings. <b>Reset to normal</b> puts them back.</p>
+<p>If the voice sounds a little ahead of or behind the music in recordings, move <b>⏱ Timing</b> a small step and try again.</p>
 <p>Recordings are saved in <b>Documents › Karaoke Recordings</b>, named with the song and the date.</p></section>
 
 <section id="g-recordings"><h4>Listening to recordings</h4>
@@ -232,6 +235,17 @@
 
     </div>
   </div>
+</div>
+<div class="mixpanel" id="mixPanel" style="display:none" role="dialog" aria-labelledby="mixTitle">
+  <div class="mixhead"><h3 id="mixTitle">🎚 Recording Mix</h3><button id="btnMixClose">Close</button></div>
+  <p class="mhelp">These only change the <b>recording</b>. What the room hears stays the same.</p>
+  <div class="fader"><label for="mixMic">🎤 Mic</label><input type="range" id="mixMic" min="0" max="400" step="5"><span id="mixMicVal"></span></div>
+  <div class="mmeter" title="Mic coming in from the mixer"><div id="micMeterFill"></div></div>
+  <div class="fader"><label for="mixMusic">🎵 Music</label><input type="range" id="mixMusic" min="0" max="200" step="5"><span id="mixMusicVal"></span></div>
+  <div class="fader"><label for="mixSync">⏱ Timing</label><input type="range" id="mixSync" min="-300" max="300" step="10"><span id="mixSyncVal"></span></div>
+  <p class="mhelp">Leave Timing at 0 unless the voice sounds ahead of or behind the music in recordings.</p>
+  <div class="fader"><label>Recording level</label><div class="mmeter big"><div id="mixMeterFill"></div></div></div>
+  <div class="mrow" style="justify-content:flex-end"><button id="btnMixReset">Reset to normal</button></div>
 </div>
 <div class="msg" id="msg"></div>
 <div class="busy" id="busy">Loading…</div>
