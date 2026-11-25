@@ -44,4 +44,8 @@ npm start          # run it
 npm run dist       # build installers into dist/ (run on Windows)
 ```
 
-Smoke test (Linux needs `xvfb-run`): `node test/smoke.mjs <folder with songs>`
+Tests (Linux needs `xvfb-run`):
+- `node test/ci-smoke.mjs` — plays the songs in `test/fixtures` (MP3+G zip, MP3+CDG, MP4), key change,
+  text input, navigation guard, page errors, clean close. CI runs it against the built Windows app
+  and won't publish a release if it fails.
+- `node test/rec.mjs <song folder>` — recording (uses a fake microphone).

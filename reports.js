@@ -82,6 +82,8 @@ async function send(opts) {
     log('warn', 'report not sent, saved for later:', e.message);
     try {
       fs.mkdirSync(pendingDir(), { recursive: true });
+      const old = fs.readdirSync(pendingDir()).sort();
+      for (const f of old.slice(0, Math.max(0, old.length - 19))) fs.unlinkSync(path.join(pendingDir(), f)); // keep at most 20
       fs.writeFileSync(path.join(pendingDir(), Date.now() + '.json'), JSON.stringify(report));
     } catch {}
     return { ok: false, reason: e.message };

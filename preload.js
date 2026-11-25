@@ -23,4 +23,9 @@ contextBridge.exposeInMainWorld('api', {
   recDelete: name => ipcRenderer.invoke('rec-delete', name),
   recShow: name => ipcRenderer.invoke('rec-show', name),
   recFolder: () => ipcRenderer.invoke('rec-folder'),
+  onAppClosing: cb => ipcRenderer.on('app-closing', () => cb()),
+  closeReady: () => ipcRenderer.invoke('close-ready'),
+  tvFullscreen: () => ipcRenderer.invoke('tv-fullscreen'),
+  onTvChanged: cb => ipcRenderer.on('tv-changed', (_e, connected) => cb(connected)),
+  keepAwake: on => ipcRenderer.invoke('keep-awake', on),
 });

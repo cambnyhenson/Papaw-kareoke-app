@@ -1,6 +1,16 @@
 
 
 const $ = id => document.getElementById(id);
+// Catch errors from the very start (the Report button shows them; see PROBLEM REPORTS below).
+const earlyErrors=[];
+function noteError(msg){
+  earlyErrors.push(msg); try{ window.api.log('error', msg); }catch(e){}
+  const b=$('btnReport'); if(b){ b.classList.add('alert'); b.textContent='⚠ Report a Problem ('+earlyErrors.length+')'; }
+}
+window.addEventListener('error', e=>noteError('page error: '+(e.error&&e.error.stack||e.message)+' @ '+e.filename+':'+e.lineno));
+window.addEventListener('unhandledrejection', e=>noteError('page error (promise): '+(e.reason&&e.reason.stack||e.reason)));
+// A file dropped on the window must never replace the app.
+for(const ev of ['dragover','drop']) document.addEventListener(ev, e=>e.preventDefault());
 const fmt = s => { s = Math.max(0, s|0); return (s/60|0) + ':' + String(s%60).padStart(2,'0'); };
 let msgTimer;
 function toast(t, ms=4000){ try{ window.api.log('ui', t); }catch(e){} const m=$('msg'); m.textContent=t; m.style.display='block'; clearTimeout(msgTimer); msgTimer=setTimeout(()=>m.style.display='none', ms); }
@@ -168,6 +178,7 @@ const stripExt = n => { const i=n.lastIndexOf('.'); return i<0?n:n.slice(0,i); }
 const readFile = key => window.api.read(key);
 let nameOrder = localStorage.getItem('kp.nameOrder') || 'at';   // 'at' = Artist - Title, 'ta' = Title - Artist
 let sortBy = localStorage.getItem('kp.sort') || 'artist';
+const collator = new Intl.Collator(undefined,{sensitivity:'base',numeric:true});
 
 /* "SC8123-05 - Patsy Cline - Crazy" -> {code:'SC8123-05', artist:'Patsy Cline', title:'Crazy'} */
 const CODE_RE=/^[\[(]?([a-z]{1,8}[- ]?\d{2,}[a-z0-9]*(?:[-_. ]\d{1,3}[a-z]?)?)[\])]?\s*(?:[-_.]\s*)?/i;
@@ -209,7 +220,7 @@ function buildLibrary(){
   updateLibStatus(); doSearch(); renderPlaylist();
 }
 function sortLibrary(){
-  const c=(a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true});
+  const c=collator.compare;
   libList=[...library.values()].sort(sortBy==='title'
     ? (a,b)=>c(a.title,b.title)||c(a.artist,b.artist)
     : (a,b)=>c(a.artist||'￿',b.artist||'￿')||c(a.title,b.title));
@@ -227,7 +238,8 @@ function updateLibStatus(){
   $('offline').style.display=off.length?'':'none';
   $('offline').textContent=off.length ? '⚠ Not plugged in: '+off.map(f=>f.label||f.name).join(', ') : '';
 }
-window.api.onScanProgress((name,n)=>{ scanNote='checking '+name+'… '+n.toLocaleString()+' files'; updateLibStatus(); });
+window.api.onScanProgress((name,n)=>{ scanNote='checking '+name+'… '+n.toLocaleString()+' files'; updateLibStatus();
+  if($('busy').style.display==='flex' && /^Reading songs/.test($('busy').textContent)) $('busy').textContent='Reading songs… '+n.toLocaleString()+' files found so far. The first time on a big drive takes a few minutes.'; });
 
 async function loadIndex(){
   const r=await window.api.libGet(); folders=r.folders; rawFiles=r.files; buildLibrary(); renderFolders();
@@ -247,7 +259,7 @@ async function rescan(id, quietIfNoChange){
 // when a song drive gets plugged in later, notice it and bring its songs back
 setInterval(async()=>{
   if(!folders.some(f=>!f.online)) return;
-  const st=await window.api.libStatus();
+  let st; try{ st=await window.api.libStatus(); }catch(e){ return; }
   const back=st.filter(f=>f.online && !folders.find(x=>x.id===f.id&&x.online));
   if(back.length){ folders=st; toast('Song drive connected: '+back.map(f=>f.label||f.name).join(', '),4000); buildLibrary(); renderFolders(); rescan(null,true); }
 }, 15000);
@@ -272,7 +284,7 @@ $('btnAddFolder').onclick=async()=>{
   const dir=await window.api.pickFolder(); if(!dir) return;
   const id=await window.api.libAdd(dir);
   if(!id){ toast('That folder is already in the library.'); return; }
-  await loadIndex(); busy(true,'Reading songs… this can take a few minutes the first time on a big drive');
+  await loadIndex(); busy(true,'Reading songs… The first time on a big drive takes a few minutes.');
   await rescan(id,true); busy(false);
 };
 $('btnRescan').onclick=()=>rescan(null,false);
@@ -318,6 +330,7 @@ function renderPlaylist(){
     r.innerHTML=`<span class="num">${it.played?'✓':i+1}</span><button title="Sing this song now">▶</button>
       <div class="name"><div></div></div>${it.key?`<span class="keytag">Key ${keyText(it.key)}</span>`:''}
       <button title="Move up">▲</button><button title="Move down">▼</button><button title="Remove">✕</button>`;
+    if(s && s.name!==it.name){ it.name=s.name; save(); }   // e.g. after changing "File names look like"
     r.querySelector('.name div').textContent=it.name+(miss?(s?'  (drive not plugged in)':'  (file not found)'):'');
     const b=r.querySelectorAll('button');
     b[0].onclick=()=>playItem(it);
@@ -333,6 +346,7 @@ $('btnClearAll').onclick=()=>{ if(confirm('Remove every song from the playlist?'
 /* ================= PLAYBACK ================= */
 const video=$('video'), pCanvas=$('previewCanvas');
 let song=null;          // {item, kind:'cdg'|'video'|'audio', videoAudio:'engine'|'element'}
+let loadToken=0;
 let videoUrl=null;
 
 function current(){ return playlist.find(i=>i.id===currentId); }
@@ -345,6 +359,7 @@ async function playItem(it){
   const s=library.get(it.path); if(!s){ toast('That song file was not found in the library.'); return; }
   if(!s.online){ toast('That song is on a drive that isn’t plugged in.'); return; }
   stopSong(true);
+  const token=++loadToken;
   busy(true,'Loading '+s.name+'…');
   window.api.log('info', 'play: '+s.name+' ['+s.type+'] key '+it.key+' — '+s.path);
   try{
@@ -366,6 +381,7 @@ async function playItem(it){
       catch(e){ videoAudio='element'; video.muted=false; }
       if(video.readyState<1) await new Promise((res,rej)=>{ video.onloadedmetadata=res; video.onerror=()=>rej(new Error('This video format can’t be played')); });
     }
+    if(token!==loadToken) return;   // another song was picked while this one loaded
     cdg.load(cdgBytes);
     if(buf) engine.load(buf); else engine.unload();
     song={item:it, kind, videoAudio};
@@ -377,6 +393,7 @@ async function playItem(it){
     busy(false);
     play();
   }catch(e){
+    if(token!==loadToken) return;
     busy(false); song=null; currentId=null; renderPlaylist();
     window.api.log('error', 'could not play '+s.path+': '+(e&&e.stack||e));
     toast('Could not play "'+s.name+'": '+e.message, 6000);
@@ -429,10 +446,15 @@ function changeKey(d){ const it=current(); if(!it||usesElement()) return; it.key
   engine.setKey(it.key); updateKeyUI(); renderPlaylist(); }
 $('keyUp').onclick=()=>changeKey(1); $('keyDown').onclick=()=>changeKey(-1);
 
+const typing = t => t && (t.tagName==='TEXTAREA' || t.tagName==='SELECT' || t.isContentEditable || (t.tagName==='INPUT' && t.type==='text'));
+const modalOpen = () => ['foldersModal','reportModal'].some(id=>$(id).style.display!=='none');
 document.addEventListener('keydown',e=>{
-  if(e.target.tagName==='INPUT' && e.target.type==='text') return;
+  if(e.key==='Escape'){ for(const id of ['foldersModal','reportModal']) $(id).style.display='none'; return; }
+  if(typing(e.target) || modalOpen()) return;
   if(e.code==='Space'){ e.preventDefault(); if(song) $('btnPlay').click(); }
 });
+// stop a focused button from also "clicking" when Space is let go
+document.addEventListener('keyup',e=>{ if(e.code==='Space' && !typing(e.target) && e.target.tagName==='BUTTON') e.preventDefault(); });
 
 /* ================= OUTPUT DEVICE (the mixer) ================= */
 async function listOutputs(){
@@ -499,25 +521,36 @@ function closeInput(){
 
 function startRecording(title){
   if(!rec.node){ toast('Recording is on, but no input is picked. Choose the mixer under "Record from".', 7000); return false; }
-  if(!rec.worker){ rec.worker=new Worker('mp3-worker.js'); rec.worker.onmessage=e=>finishSave(e.data); }
+  if(!rec.worker){ rec.worker=new Worker('mp3-worker.js'); rec.worker.onmessage=e=>finishSave(e.data);
+    rec.worker.onerror=e=>{ noteError('recording worker: '+e.message); while(rec.pending.length) finishSave({error:e.message}); }; }
   rec.worker.postMessage({type:'start', sampleRate:engine.ctx.sampleRate});
   rec.node.port.postMessage('start');
   rec.active=true; rec.started=performance.now(); rec.title=title;
   updateRecUI(); return true;
 }
 function stopRecording(){
-  if(!rec.active) return;
+  if(!rec.active) return Promise.resolve();
   rec.active=false; if(rec.node) rec.node.port.postMessage('stop');
   const secs=(performance.now()-rec.started)/1000;
-  rec.pending.push({title:rec.title, keep:secs>=3});   // throw away accidental 1–2 second takes
+  const job={title:rec.title, keep:secs>=3};            // throw away accidental 1–2 second takes
+  const done=new Promise(res=>{ job.done=res; });
+  rec.pending.push(job);
   rec.worker.postMessage({type:'stop'});
   updateRecUI();
+  return done;
 }
-async function finishSave(bytes){
-  const job=rec.pending.shift(); if(!job || !job.keep) return;
-  try{ const name=await window.api.recSave(job.title, bytes); toast('Recording saved: '+name, 5000);
-    if($('recView').style.display!=='none') showRecordings(); }
-  catch(e){ noteError('could not save recording: '+(e.stack||e)); toast('Could not save the recording: '+e.message, 8000); }
+/** Wait for every recording still being encoded/saved (used before closing or updating). */
+function recordingsSettled(){ stopRecording(); return Promise.race([Promise.all(rec.pending.map(j=>j.done)), new Promise(r=>setTimeout(r,9000))]); }
+async function finishSave(data){
+  const job=rec.pending.shift(); if(!job) return;
+  try{
+    if(data && data.error){ noteError('recording encoder: '+data.error); toast('The recording could not be saved (encoder problem).', 8000); return; }
+    if(!job.keep) return;
+    const name=await window.api.recSave(job.title, data); toast('Recording saved: '+name, 5000);
+    window.api.log('info','recording saved: '+name);
+    if($('recView').style.display!=='none') showRecordings();
+  }catch(e){ noteError('could not save recording: '+(e.stack||e)); toast('Could not save the recording: '+e.message, 8000); }
+  finally{ job.done(); }
 }
 function updateRecUI(){
   $('btnRec').classList.toggle('on', rec.armed);
@@ -591,13 +624,17 @@ function openTV(){
   tv.document.close();
   tvCanvas=tv.document.getElementById('c');
   const hint=tv.document.getElementById('h');
-  const syncHint=()=>{ const fs=!!tv.document.fullscreenElement || (tv.innerHeight>=tv.screen.height-2 && tv.innerWidth>=tv.screen.width-2);
+  const syncHint=()=>{ if(!tv || tv.closed) return; const fs=!!tv.document.fullscreenElement || (tv.innerHeight>=tv.screen.height-2 && tv.innerWidth>=tv.screen.width-2);
     hint.style.display=fs?'none':''; tv.document.body.style.cursor=fs?'none':''; };
-  tv.document.addEventListener('dblclick',()=>{ const d=tv.document; if(d.fullscreenElement) d.exitFullscreen(); else d.documentElement.requestFullscreen().catch(()=>{}); });
+  tv.document.addEventListener('dblclick',()=>window.api.tvFullscreen());
   tv.addEventListener('resize',syncHint); setTimeout(syncHint,300);
   const loop=()=>{ if(tv && !tv.closed){ tick(); tv.requestAnimationFrame(loop); } }; tv.requestAnimationFrame(loop);
 }
 $('btnTV').onclick=openTV;
+window.api.onTvChanged(connected=>{
+  if(connected){ if(tv && !tv.closed) tv.close(); setTimeout(openTV, 800); toast('TV connected: lyrics screen opened on it.'); }
+  else toast('TV disconnected. Click 📺 TV Screen after plugging it back in.', 6000);
+});
 
 function fit(ctx, W, H, src, sw, sh, smooth){
   const s=Math.min(W/sw, H/sh), w=sw*s, h=sh*s;
@@ -622,7 +659,7 @@ function wrapText(c, t, x, y, maxW, lh){
 }
 
 /* ================= MAIN LOOP ================= */
-let lastTick=0;
+let lastTick=0, lastAwake=null;
 function tick(){
   const now=performance.now(); if(now-lastTick<12) return; lastTick=now;
   const p=pos(), d=dur();
@@ -637,6 +674,8 @@ function tick(){
   recTick();
   $('tCur').textContent=fmt(p); $('tDur').textContent=fmt(d);
   if(song) $('btnPlay').textContent = isPlaying()?'❚❚':'▶';
+  const awake = !!((song && isPlaying()) || (tv && !tv.closed) || rec.active);
+  if(awake!==lastAwake){ lastAwake=awake; window.api.keepAwake(awake); }
   if(pCanvas.style.display!=='none') drawScreen(pCanvas);
   if(tv && !tv.closed && tvCanvas){
     const dpr=tv.devicePixelRatio||1, W=Math.round(tv.innerWidth*dpr), H=Math.round(tv.innerHeight*dpr);
@@ -662,26 +701,23 @@ window.api.onUpdateReady(v=>{
   $('updateText').textContent='A new version ('+v+') is ready. It installs automatically next time the app is closed.';
   $('update').style.display='flex';
 });
-$('btnUpdate').onclick=()=>{
+$('btnUpdate').onclick=async()=>{
   if(song && isPlaying() && !confirm('A song is playing. Stop it and restart to update now?')) return;
-  stopSong(); window.api.installUpdate();
+  stopSong(); busy(true,'Saving and restarting…'); await recordingsSettled(); window.api.installUpdate();
 };
+window.api.onAppClosing(async()=>{
+  if(rec.active || rec.pending.length){ stopSong(); busy(true,'Saving the recording…'); await recordingsSettled(); }
+  window.api.closeReady();
+});
 
 /* ================= PROBLEM REPORTS ================= */
-let errorCount=0;
-function noteError(msg){
-  errorCount++; window.api.log('error', msg);
-  $('btnReport').classList.add('alert'); $('btnReport').textContent='⚠ Report a Problem ('+errorCount+')';
-}
-window.addEventListener('error', e=>noteError('page error: '+(e.error&&e.error.stack||e.message)+' @ '+e.filename+':'+e.lineno));
-window.addEventListener('unhandledrejection', e=>noteError('page error (promise): '+(e.reason&&e.reason.stack||e.reason)));
 window.__kpState=()=>({
   songs: libList.length,
   folders: folders.map(f=>({name:f.name, online:f.online, files:f.count})),
   playing: song ? {name:song.item.name, kind:song.kind, key:song.item.key, at:Math.round(pos())+'s of '+Math.round(dur())+'s'} : null,
   playlist: playlist.length, soundTo: $('outDev').selectedOptions[0]?.textContent, recordFrom: $('inDev').selectedOptions[0]?.textContent,
   recording: rec.active, recordArmed: rec.armed, outputRate: engine.ctx ? engine.ctx.sampleRate : null,
-  tvOpen: !!(tv && !tv.closed), errorsThisSession: errorCount,
+  tvOpen: !!(tv && !tv.closed), errorsThisSession: earlyErrors.length, recentErrors: earlyErrors.slice(-5),
 });
 $('btnReport').onclick=()=>{ $('reportText').value=''; $('reportStatus').textContent=''; $('btnReportSend').disabled=false; $('reportModal').style.display='flex'; $('reportText').focus(); };
 $('btnReportCancel').onclick=()=>{ $('reportModal').style.display='none'; };
@@ -689,7 +725,7 @@ $('btnLogs').onclick=()=>window.api.openLogs();
 $('btnReportSend').onclick=async()=>{
   $('btnReportSend').disabled=true; $('reportStatus').textContent='Sending…';
   const r=await window.api.sendReport({ description:$('reportText').value.trim(), state:window.__kpState(), kind:'report' });
-  if(r.ok){ $('reportStatus').textContent='✓ Sent. Thank you!'; errorCount=0; $('btnReport').classList.remove('alert'); $('btnReport').textContent='⚠ Report a Problem';
+  if(r.ok){ $('reportStatus').textContent='✓ Sent. Thank you!'; earlyErrors.length=0; $('btnReport').classList.remove('alert'); $('btnReport').textContent='⚠ Report a Problem';
     setTimeout(()=>{ $('reportModal').style.display='none'; },1500); }
   else { $('reportStatus').textContent = /not set up/.test(r.reason||'')
       ? 'Saved on this computer. (Sending isn’t set up in this version yet; it will go out after the next update.)'

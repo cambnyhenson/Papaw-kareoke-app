@@ -1,5 +1,5 @@
 // Karaoke Player — Electron main process
-const { app, BrowserWindow, ipcMain, dialog, screen, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, session, shell, Menu, powerSaveBlocker } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const { autoUpdater } = require('electron-updater');
@@ -7,6 +7,8 @@ const reports = require('./reports');
 const { log } = reports;
 
 let win = null;
+let tvWin = null;          // the TV (lyrics) window, when open
+let closeReady = false;   // set once the page has saved any recording in progress
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -25,8 +27,8 @@ function tvDisplay() {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1280, height: 820, minWidth: 900, minHeight: 600,
-    backgroundColor: '#111418', title: 'Karaoke Player', autoHideMenuBar: true,
+    width: 1280, height: 820, minWidth: 900, minHeight: 600, show: false,
+    backgroundColor: '#FFFFFF', title: 'Karaoke Player', autoHideMenuBar: true,
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -53,6 +55,19 @@ function createWindow() {
   });
 
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  // Start maximized so the controls at the bottom are never off the bottom of a laptop screen.
+  win.once('ready-to-show', () => { win.maximize(); win.show(); });
+  win.webContents.on('did-create-window', child => {
+    tvWin = child;
+    child.on('closed', () => { if (tvWin === child) tvWin = null; });
+  });
+  // Closing the app: let the page finish saving a recording first (max 10 s).
+  win.on('close', e => {
+    if (closeReady) return;
+    e.preventDefault();
+    win.webContents.send('app-closing');
+    setTimeout(() => { closeReady = true; if (win) win.close(); }, 10000);
+  });
 
   // Log the page's own errors, and recover from crashes with an offer to send a report.
   win.webContents.on('console-message', (e, level, message, line, source) => {
@@ -93,7 +108,12 @@ ipcMain.handle('lib-scan', (e, id) => {
   }
   return scanning;
 });
-ipcMain.handle('read', async (_e, key) => fs.readFile(await library.fullPath(key)));
+ipcMain.handle('read', async (_e, key) => {
+  const full = await library.fullPath(key);
+  const st = await fs.stat(full);
+  if (st.size > 1.5 * 1024 ** 3) throw new Error('This file is too big to play (' + (st.size / 1024 ** 3).toFixed(1) + ' GB)');
+  return fs.readFile(full);
+});
 
 /* ---------- logging & problem reports ---------- */
 ipcMain.handle('log', (_e, level, msg) => log(level, msg));
@@ -151,6 +171,15 @@ ipcMain.handle('rec-show', (_e, name) => shell.showItemInFolder(recPath(name)));
 ipcMain.handle('rec-folder', async () => { await fs.mkdir(recDir(), { recursive: true }); return shell.openPath(recDir()); });
 
 ipcMain.handle('has-tv', () => tvDisplay().external);
+ipcMain.handle('close-ready', () => { closeReady = true; if (win) win.close(); });
+ipcMain.handle('tv-fullscreen', () => { if (tvWin) tvWin.setFullScreen(!tvWin.isFullScreen()); });
+
+// Keep the screens awake while a song is playing or the TV screen is up (no screensaver mid-song).
+let awakeId = null;
+ipcMain.handle('keep-awake', (_e, on) => {
+  if (on && awakeId === null) { awakeId = powerSaveBlocker.start('prevent-display-sleep'); log('info', 'keeping display awake'); }
+  if (!on && awakeId !== null) { powerSaveBlocker.stop(awakeId); awakeId = null; log('info', 'display may sleep again'); }
+});
 ipcMain.handle('version', () => app.getVersion());
 
 /* ---------- automatic updates from GitHub Releases ---------- */
@@ -166,7 +195,41 @@ function setupUpdates() {
 }
 ipcMain.handle('update-install', () => autoUpdater.quitAndInstall(true, true));
 
+// Nothing in the app should ever navigate away (e.g. a file dragged onto the window) or open other windows.
+app.on('web-contents-created', (_e, wc) => {
+  wc.on('will-navigate', (e, url) => { e.preventDefault(); log('warn', 'blocked navigation to', url); });
+});
+
+function buildMenu() {
+  // Simple menu (press Alt to see it): zoom for bigger text, no reload/dev tools to hit by accident.
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: 'View', submenu: [
+      { role: 'zoomIn', label: 'Bigger Text', accelerator: 'CmdOrCtrl+=' },
+      { role: 'zoomOut', label: 'Smaller Text' },
+      { role: 'resetZoom', label: 'Normal Text Size' },
+      { type: 'separator' }, { role: 'togglefullscreen' },
+    ] },
+    { label: 'Help', submenu: [
+      { label: 'Open Log Folder', click: () => shell.openPath(reports.logDir()) },
+      { label: `Version ${app.getVersion()}`, enabled: false },
+    ] },
+  ]));
+}
+
+// TV plugged in or unplugged while the app is open.
+function watchDisplays() {
+  screen.on('display-added', () => { log('info', 'display added'); if (win) win.webContents.send('tv-changed', true); });
+  screen.on('display-removed', () => {
+    log('info', 'display removed');
+    // Don't let a full-screen lyrics window land on top of the laptop's controls.
+    if (tvWin && !tvWin.isDestroyed()) tvWin.close();
+    if (win) win.webContents.send('tv-changed', false);
+  });
+}
+
 app.whenReady().then(() => {
+  buildMenu();
+  watchDisplays();
   // Allow the page to list sound outputs by name and send audio to a chosen one (the mixer).
   const allowed = new Set(['media', 'speaker-selection', 'fullscreen']);
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));

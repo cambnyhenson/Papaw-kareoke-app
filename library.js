@@ -130,6 +130,9 @@ module.exports = {
       if (!p) continue; // drive not plugged in: keep the old list
       const out = [];
       await walk(p, '', out, n => progress(f.name, n));
+      // Folder removed during the scan, or drive unplugged mid-scan: don't save a partial list
+      // (that would make songs "disappear" until the next scan).
+      if (!lib.folders.includes(f) || !(await exists(p))) continue;
       const before = new Set(lib.files[f.id] || []), after = new Set(out);
       for (const r of after) if (!before.has(r)) added++;
       for (const r of before) if (!after.has(r)) removed++;
