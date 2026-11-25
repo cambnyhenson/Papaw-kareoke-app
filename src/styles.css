@@ -7,7 +7,7 @@
   --sel:#FFF3C4; --red:#A4262C; --green:#107C10;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
   font:17px/1.4 "Segoe UI",system-ui,sans-serif}
 button{font:inherit;color:var(--text);background:var(--btn);border:1px solid var(--line);
   border-radius:4px;padding:8px 14px;cursor:pointer;font-weight:600}
@@ -22,15 +22,15 @@ input[type=range]{accent-color:#111}
 input[type=checkbox]{accent-color:#111;width:18px;height:18px}
 select{font:inherit;color:#000;background:#FFF;border:1px solid #000;border-radius:4px;padding:6px 10px;max-width:280px}
 
-.app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
+.app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);height:100%;width:100%}
 header{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#FFF;border-bottom:2px solid #000;flex-wrap:wrap}
 header h1{font-size:22px;margin:0 12px 0 0}
 .status{margin-left:auto;font-size:15px;font-weight:600;text-align:right}
 .out{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600}
 .offline{color:var(--red);font-size:15px;font-weight:700}
 
-main{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;min-height:0;background:var(--soft)}
-.panel{background:#FFF;border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:0}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:12px;min-height:0;background:var(--soft)}
+.panel{background:#FFF;border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:0;min-width:0}
 .panel h2{font-size:18px;margin:0;padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
 .panel h2 .sp{flex:1}
 .panel h2 button{padding:4px 12px;font-size:15px}
@@ -52,7 +52,7 @@ button.sort.active{background:#111;color:#FFF;border-color:#111}
 .row .name{flex:1;min-width:0}
 .row .name div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .t{font-weight:700}
-.row .folder,.row .meta{font-size:14px}
+.row .folder,.row .meta{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row button{padding:4px 12px;font-size:15px}
 .tag{font-size:13px;padding:2px 7px;border-radius:4px;border:1px solid #000;background:#FFF;white-space:nowrap;font-weight:600}
 .tag.code{font-family:Consolas,monospace}
@@ -64,7 +64,7 @@ button.sort.active{background:#111;color:#FFF;border-color:#111}
 .empty{padding:24px;text-align:center}
 .help{font-size:16px;padding:18px;line-height:1.6}
 
-footer{display:grid;grid-template-columns:auto 1fr;gap:14px;padding:12px 14px;background:#FFF;border-top:2px solid #000;align-items:center}
+footer{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;padding:12px 14px;background:#FFF;border-top:2px solid #000;align-items:center}
 .preview{width:240px;height:135px;background:#000;border-radius:4px;overflow:hidden;position:relative;border:1px solid #000}
 .preview canvas,.preview video{width:100%;height:100%;display:block;object-fit:contain;background:#000}
 .controls{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -110,3 +110,9 @@ button.guide{margin-left:auto}
 .guide p{margin:8px 0}
 .guide li{margin:6px 0}
 .guide table.keys td{padding:6px 18px 6px 0;font-size:18px}
+/* never let long text widen the window */
+header>*{min-width:0}
+select{min-width:0;text-overflow:ellipsis}
+.out{min-width:0;flex-shrink:1}
+.out select{max-width:240px}
+.list{overflow-x:hidden}

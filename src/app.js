@@ -232,7 +232,7 @@ $('sortTitle').onclick=()=>{ sortBy='title'; localStorage.setItem('kp.sort',sort
 let scanNote='';
 function updateLibStatus(){
   const off=folders.filter(f=>!f.online);
-  let t=libList.length.toLocaleString()+' songs';
+  let t=libList.length.toLocaleString()+(libList.length===1?' song':' songs');
   if(scanNote) t+=' · '+scanNote;
   $('status').textContent=t;
   $('offline').style.display=off.length?'':'none';
@@ -303,7 +303,7 @@ function doSearch(){
   for(const s of res){
     const r=document.createElement('div'); r.className='row'+(s.online?'':' missing');
     r.innerHTML=`<div class="name"><div class="t"></div><div class="folder"></div></div>${s.code?'<span class="tag code"></span>':''}<span class="tag">${typeLabel[s.type]}</span><button>Add</button>`;
-    r.querySelector('.t').textContent=s.title;
+    r.querySelector('.t').textContent=s.title; r.title=s.name+'\n'+s.folder;
     r.querySelector('.folder').textContent=(s.artist||'')+(s.artist?'  ·  ':'')+s.folder;
     if(s.code) r.querySelector('.code').textContent=s.code;
     r.querySelector('button').onclick=()=>addToPlaylist(s);
@@ -331,7 +331,7 @@ function renderPlaylist(){
       <div class="name"><div></div></div>${it.key?`<span class="keytag">Key ${keyText(it.key)}</span>`:''}
       <button title="Move up">▲</button><button title="Move down">▼</button><button title="Remove">✕</button>`;
     if(s && s.name!==it.name){ it.name=s.name; save(); }   // e.g. after changing "File names look like"
-    r.querySelector('.name div').textContent=it.name+(miss?(s?'  (drive not plugged in)':'  (file not found)'):'');
+    r.querySelector('.name div').textContent=it.name+(miss?(s?'  (drive not plugged in)':'  (file not found)'):''); r.querySelector('.name').title=it.name;
     const b=r.querySelectorAll('button');
     b[0].onclick=()=>playItem(it);
     b[1].onclick=()=>{ if(i>0){ [playlist[i-1],playlist[i]]=[playlist[i],playlist[i-1]]; save(); renderPlaylist(); } };

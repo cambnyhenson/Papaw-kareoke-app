@@ -33,6 +33,8 @@ const status = await pg.textContent('#status');
 check(/^3 songs/.test(status), `library found the 3 test songs (${status})`);
 
 for (const b of await pg.$$('#results .row button')) await b.click();
+const fits = await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#playlist').getBoundingClientRect().right <= innerWidth);
+check(fits, 'window fits the screen (no sideways scrolling, playlist visible)');
 const names = await pg.$$eval('#playlist .row .name div', e => e.map(x => x.textContent));
 check(names.length === 3, 'songs added to playlist: ' + names.join(' | '));
 
