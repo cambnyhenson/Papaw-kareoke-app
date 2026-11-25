@@ -1,6 +1,6 @@
 // Logging and "Report a Problem": keeps a log file, and sends problem reports (with the end of
 // the log) to the GitHub repo as issues so they can be read and fixed.
-const { app, net } = require('electron');
+const { app } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -57,7 +57,8 @@ function buildReport({ description = '', state = {}, kind = 'report', error = ''
 async function post(report) {
   const c = config();
   if (!c || !c.token) throw new Error('Reporting is not set up in this build');
-  const send = labels => net.fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/issues`, {
+  // Node's fetch, not Electron's net.fetch: net.fetch was seen dropping the Authorization header.
+  const send = labels => fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/issues`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${c.token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json',
       'User-Agent': 'KaraokePlayer', 'X-GitHub-Api-Version': '2022-11-28' },
