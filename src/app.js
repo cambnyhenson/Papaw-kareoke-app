@@ -152,17 +152,19 @@ async function readZip(bytes){
   const cdOff=dv.getUint32(eocd+16,true), cdEnd=cdOff+dv.getUint32(eocd+12,true);
   const entries=[]; let p=cdOff;
   while(p+46<=cdEnd && dv.getUint32(p,true)===0x02014b50){
-    const method=dv.getUint16(p+10,true), comp=dv.getUint32(p+20,true),
+    const method=dv.getUint16(p+10,true), comp=dv.getUint32(p+20,true), size=dv.getUint32(p+24,true),
       nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), lo=dv.getUint32(p+42,true);
     const name=new TextDecoder().decode(bytes.subarray(p+46, p+46+nl));
-    entries.push({name, method, comp, lo}); p+=46+nl+el+cl;
+    entries.push({name, method, comp, size, lo}); p+=46+nl+el+cl;
   }
   async function extract(e){
     const start=e.lo+30+dv.getUint16(e.lo+26,true)+dv.getUint16(e.lo+28,true);
     const raw=bytes.slice(start, start+e.comp);
     if(e.method===0) return raw;
     if(e.method===8) return new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
-    throw new Error('Unsupported zip compression');
+    if(e.method===9) return window.inflateRaw(raw, new Uint8Array(e.size), true);   // Deflate64 (older karaoke zips)
+    const kinds={12:'BZIP2',14:'LZMA',93:'Zstandard',95:'XZ',98:'PPMd',99:'password-protected (AES)'};
+    throw new Error('This zip uses '+(kinds[e.method]||'compression type '+e.method)+', which isn’t supported yet');
   }
   const find = ext => entries.find(e=>e.name.toLowerCase().endsWith(ext) && !e.name.includes('__MACOSX'));
   return { find, extract };
