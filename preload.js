@@ -20,7 +20,6 @@ contextBridge.exposeInMainWorld('api', {
   installUpdate: () => ipcRenderer.invoke('update-install'),
   log: (level, msg) => ipcRenderer.invoke('log', level, msg),
   sendReport: opts => ipcRenderer.invoke('report-send', opts),
-  reportConfigured: () => ipcRenderer.invoke('report-configured'),
   openLogs: () => ipcRenderer.invoke('open-logs'),
   recSave: (title, bytes, project) => ipcRenderer.invoke('rec-save', title, bytes, project),
   recList: project => ipcRenderer.invoke('rec-list', project),

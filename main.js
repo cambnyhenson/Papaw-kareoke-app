@@ -134,7 +134,6 @@ ipcMain.handle('read', async (_e, key) => {
 /* ---------- logging & problem reports ---------- */
 ipcMain.handle('log', (_e, level, msg) => log(level, msg));
 ipcMain.handle('report-send', (_e, opts) => reports.send(opts));
-ipcMain.handle('report-configured', () => reports.configured());
 ipcMain.handle('open-logs', () => shell.openPath(reports.logDir()));
 
 let crashing = false;

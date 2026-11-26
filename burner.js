@@ -13,6 +13,7 @@ param([string]$Mode, [string]$Dir)
 $ErrorActionPreference = 'Stop'
 function Say($o) { [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress)); [Console]::Out.Flush() }
 try {
+  if ($Mode -eq 'burn') {
   Add-Type -TypeDefinition @'
 using System; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes;
 public static class KaraokeStream {
@@ -21,13 +22,19 @@ public static class KaraokeStream {
   public static IStream Open(string file) { IStream s; SHCreateStreamOnFileEx(file, 0x20, 0, false, null, out s); return s; }
 }
 '@
+  }
   $master = New-Object -ComObject IMAPI2.MsftDiscMaster2
   if ($master.Count -eq 0) { Say @{ type = 'status'; burner = $null; reason = 'no-burner' }; exit 0 }
-  $rec = New-Object -ComObject IMAPI2.MsftDiscRecorder2
-  $rec.InitializeDiscRecorder($master.Item(0))
-  $name = (($rec.VendorId + ' ' + $rec.ProductId) -replace '\s+', ' ').Trim()
   $tao = New-Object -ComObject IMAPI2.MsftDiscFormat2TrackAtOnce
-  if (-not $tao.IsRecorderSupported($rec)) { Say @{ type = 'status'; burner = $name; reason = 'cannot-burn-cds' }; exit 0 }
+  $rec = $null; $name = $null
+  foreach ($id in $master) {
+    $r = New-Object -ComObject IMAPI2.MsftDiscRecorder2
+    $r.InitializeDiscRecorder($id)
+    $n = (($r.VendorId + ' ' + $r.ProductId) -replace '\s+', ' ').Trim()
+    if (-not $name) { $name = $n }
+    if ($tao.IsRecorderSupported($r)) { $rec = $r; $name = $n; break }
+  }
+  if (-not $rec) { Say @{ type = 'status'; burner = $name; reason = 'cannot-burn-cds' }; exit 0 }
   $ok = $false; try { $ok = $tao.IsCurrentMediaSupported($rec) } catch {}
   if (-not $ok) { Say @{ type = 'status'; burner = $name; reason = 'no-blank-cd' }; exit 0 }
   $tao.Recorder = $rec

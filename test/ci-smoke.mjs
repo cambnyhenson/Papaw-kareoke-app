@@ -60,6 +60,10 @@ await pg.click('#results .row >> nth=0 >> button.pladd'); await pg.click('#choos
 await pg.click('#results .row >> nth=0 >> button.pladd'); await pg.click('#chooseList .row:has-text("Smoke Test List")'); await pg.waitForTimeout(300); // already on it: refused
 const counts = await pg.evaluate(() => Object.fromEntries(__kp.saved().lists.map(l => [l.name, l.items.length])));
 check(counts['Smoke Test List'] === 4 && counts['Second List'] === 1, 'Save as Playlist and 📋+ work, no duplicates (' + JSON.stringify(counts) + ')');
+await pg.click('#results .row >> nth=0 >> button.pladd'); await pg.keyboard.press('Escape');
+const escOk = !(await pg.isVisible('#chooseModal'));
+await pg.click('#results .row >> nth=0 >> button.pladd'); const reopens = await pg.isVisible('#chooseModal'); await pg.click('#chooseCancel');
+check(escOk && reopens, 'Escape cancels the "which playlist" box and it opens again');
 await pg.click('#tabPl'); await pg.click('#plList .row:has-text("Smoke Test List") >> button:has-text("Open")'); await pg.waitForTimeout(300);
 check(await pg.$$eval('#plList .row', e => e.length) === 4, 'opening a saved playlist shows its songs');
 await pg.click('#btnClearAll'); await pg.click('#plAll'); await pg.waitForTimeout(300);

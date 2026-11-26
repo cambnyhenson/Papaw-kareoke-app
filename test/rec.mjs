@@ -13,7 +13,7 @@ console.log('inputs', ins);
 await pg.selectOption('#inDev', {index:1}); await pg.waitForTimeout(1500);
 console.log('meter', await pg.$eval('#meterFill', e=>e.style.width));
 await pg.click('#btnRec');
-for (const t of ['Crazy','Sweet Caroline']) { await pg.fill('#q',t); await pg.waitForTimeout(200); await pg.click('#results .row button'); }
+for (const t of ['Crazy','Sweet Caroline']) { await pg.fill('#q',t); await pg.waitForTimeout(200); await pg.click('#results .row button.add'); }
 await pg.click('#playlist .row:nth-child(1) button[title="Sing this song now"]');
 await pg.waitForTimeout(6000);
 console.log('recinfo', await pg.textContent('#recInfo'));

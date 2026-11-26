@@ -139,7 +139,7 @@ class CDG {
       if(x<6||x>=294||y<12||y>=204) k=pix[y*300+x];
       else k=pix[Math.min(215,y+vo)*300+Math.min(299,x+ho)];
       const c=pal[k], i=(y*300+x)*4; a[i]=c[0]; a[i+1]=c[1]; a[i+2]=c[2]; a[i+3]=255; }
-    this.c2.putImageData(this.img,0,0); this.dirty=false;
+    this.c2.putImageData(this.img,0,0); this.dirty=false; this.version=(this.version||0)+1;
   }
 }
 const cdg = new CDG();
@@ -280,7 +280,7 @@ async function rescan(id, quietIfNoChange){
   scanNote='checking for new songs…'; updateLibStatus();
   try{
     const before=libList.length, {added,removed}=await window.api.libScan(id);
-    await loadIndex();
+    if(added||removed) await loadIndex();   // rebuilding the list takes a couple of seconds on a big drive; skip it when nothing changed
     window.api.log('info','scan done: '+libList.length+' songs, +'+added+'/-'+removed+' files, folders: '+folders.map(f=>f.name+(f.online?'':' (offline)')).join(', '));
     const diff=libList.length-before;
     if(added||removed) toast(diff>0 ? 'Library updated: '+diff.toLocaleString()+' new songs' : diff<0 ? 'Library updated: '+(-diff).toLocaleString()+' songs no longer found' : 'Library updated',5000);
@@ -351,27 +351,31 @@ let playlist=[]; try{ playlist=JSON.parse(localStorage.getItem('kp.playlist')||'
 let currentId=null;
 const save=()=>{ try{ localStorage.setItem('kp.playlist', JSON.stringify(playlist)); }catch(e){} };
 const uid=()=>Math.random().toString(36).slice(2,10);
-function addToPlaylist(s, key=0, quiet){ playlist.push({id:uid(), path:s.path, name:s.name, key, played:false}); save(); renderPlaylist(); if(!quiet) toast('Added: '+s.name,1500); }
+const tonightItem = (s, key=0) => ({id:uid(), path:s.path, full:s.full, name:s.name, key, played:false});
+function addToPlaylist(s, key=0){ playlist.push(tonightItem(s,key)); save(); renderPlaylist(); toast('Added: '+s.name,1500); }
 const keyText = k => k===0 ? 'Original key' : (k>0?'+':'')+k;
 function renderPlaylist(){
   const box=$('playlist'); box.innerHTML='';
   if(!playlist.length){ box.innerHTML='<div class="empty">Playlist is empty.<br>Search for a song on the left and click Add.</div>'; return; }
+  let renamed=false; const frag=document.createDocumentFragment();
   playlist.forEach((it,i)=>{
-    const s = library.get(it.path), miss = libList.length && (!s || !s.online);
+    const s = songOf(it), miss = libList.length && (!s || !s.online);
+    if(s && (s.path!==it.path || s.name!==it.name)){ it.path=s.path; it.name=s.name; renamed=true; }   // follow folder re-adds / name fixes
     const r=document.createElement('div');
     r.className='row'+(it.id===currentId?' current':'')+(it.played?' played':'')+(miss?' missing':'');
     r.innerHTML=`<span class="num">${it.played?'✓':i+1}</span><button title="Sing this song now">▶</button>
       <div class="name"><div></div></div>${it.key?`<span class="keytag">Key ${keyText(it.key)}</span>`:''}
       <button title="Move up">▲</button><button title="Move down">▼</button><button title="Remove">✕</button>`;
-    if(s && s.name!==it.name){ it.name=s.name; save(); }   // e.g. after changing "File names look like"
     r.querySelector('.name div').textContent=it.name+(miss?(s?'  (drive not plugged in)':'  (file not found)'):''); r.querySelector('.name').title=it.name;
     const b=r.querySelectorAll('button');
     b[0].onclick=()=>playItem(it);
     b[1].onclick=()=>{ if(i>0){ [playlist[i-1],playlist[i]]=[playlist[i],playlist[i-1]]; save(); renderPlaylist(); } };
     b[2].onclick=()=>{ if(i<playlist.length-1){ [playlist[i+1],playlist[i]]=[playlist[i],playlist[i+1]]; save(); renderPlaylist(); } };
     b[3].onclick=()=>{ if(it.id===currentId) stopSong(); playlist.splice(i,1); save(); renderPlaylist(); };
-    box.appendChild(r);
+    frag.appendChild(r);
   });
+  box.appendChild(frag);
+  if(renamed) save();
 }
 $('btnClearPlayed').onclick=()=>{ playlist=playlist.filter(i=>!i.played||i.id===currentId); save(); renderPlaylist(); };
 $('btnClearAll').onclick=()=>{ if(confirm('Remove every song from the playlist?')){ stopSong(); playlist=[]; save(); renderPlaylist(); } };
@@ -381,7 +385,9 @@ $('btnClearAll').onclick=()=>{ if(confirm('Remove every song from the playlist?'
    path on disk plus artist/title, so it survives rescans and drive-letter changes. */
 let saved={lists:[]}, openListId=null, sppAvailable=false;
 const savePl=()=>window.api.plSave(saved).catch(e=>noteError('could not save playlists: '+e.message));
-const songOf = it => { const k = it.lib || (it.full && pathIndex.get(it.full.toLowerCase())); return k ? library.get(k) : null; };
+/* Find the library song for a list entry: by its library key first, then by its full path on disk
+   (survives a song folder being removed and added again). Used by tonight's list and saved playlists. */
+const songOf = it => (it.lib && library.get(it.lib)) || (it.path && library.get(it.path)) || (it.full && library.get(pathIndex.get(it.full.toLowerCase()))) || null;
 const itemFromSong = (s, key=0) => ({ lib:s.path, full:s.full, artist:s.artist, title:s.title, disc:s.code, key });
 const itemName = it => { const s=songOf(it); return s ? s.name : (it.artist ? it.artist+' - '+it.title : it.title || it.full); };
 
@@ -441,14 +447,15 @@ function renderPlaylists(){
 }
 function addListToTonight(L){
   let n=0, miss=0;
-  for(const it of L.items){ const s=songOf(it); if(s){ addToPlaylist(s, it.key, true); n++; } else miss++; }
+  for(const it of L.items){ const s=songOf(it); if(s){ playlist.push(tonightItem(s, it.key)); n++; } else miss++; }
+  save(); renderPlaylist();   // one redraw for the whole list
   toast(n+' songs from "'+L.name+'" added to tonight'+(miss?' ('+miss+' not found on the drive)':''), 5000);
 }
 $('btnSavePl').onclick=async()=>{
   if(!playlist.length) return toast('Put some songs on the Playlist first.');
   const n=await askName('Save this list as a playlist named:'); if(!n) return;
   const existing=saved.lists.find(l=>l.name.toLowerCase()===n.toLowerCase());
-  const items=playlist.map(it=>{ const s=library.get(it.path); return s ? itemFromSong(s,it.key) : null; }).filter(Boolean);
+  const items=playlist.map(it=>{ const s=songOf(it); return s ? itemFromSong(s,it.key) : null; }).filter(Boolean);
   if(existing){ if(!confirm('Replace the songs in "'+existing.name+'" with this list?')) return; existing.items=items; }
   else saved.lists.push({id:uid(), name:n, items});
   await savePl(); toast('Saved playlist "'+n+'" ('+items.length+' songs)', 4000);
@@ -489,7 +496,8 @@ async function importSpp(){
     for(const p of r.playlists){
       const items=p.items.map(i=>({full:i.full, artist:i.artist, title:i.title, disc:i.disc, key:i.key}));
       const ex=saved.lists.find(l=>l.name.toLowerCase()===p.name.toLowerCase());
-      if(ex){ const have=new Set(ex.items.map(i=>(i.full||'').toLowerCase())); for(const it of items) if(!have.has(it.full.toLowerCase())) ex.items.push(it); merged++; }
+      if(ex){ const have=new Set(ex.items.map(i=>(i.full||'').toLowerCase())); const before=ex.items.length;
+        for(const it of items) if(!have.has(it.full.toLowerCase())) ex.items.push(it); if(ex.items.length>before) merged++; }
       else { saved.lists.push({id:uid(), name:p.name, items}); added++; }
     }
     await savePl();
@@ -512,7 +520,7 @@ function nextItem(){ const i=playlist.findIndex(x=>x.id===currentId);
 async function decode(bytes){ const ctx=engine.ensure(); return await ctx.decodeAudioData(bytes.buffer ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset+bytes.byteLength) : bytes); }
 
 async function playItem(it){
-  const s=library.get(it.path); if(!s){ toast('That song file was not found in the library.'); return; }
+  const s=songOf(it); if(!s){ toast('That song file was not found in the library.'); return; }
   if(!s.online){ toast('That song is on a drive that isn’t plugged in.'); return; }
   stopSong(true);
   const token=++loadToken;
@@ -564,15 +572,15 @@ function play(){ if(!song) return; engine.ensure();
   const it=current(); if(it && !it.played){ it.played=true; save(); renderPlaylist(); }
   if(rec.armed && !rec.active) startRecording(song.item.name);
   recAudioStop();
-  $('btnPlay').textContent='❚❚'; }
-function pause(){ if(usesElement()) video.pause(); else { engine.pause(); if(song&&song.kind==='video') video.pause(); } $('btnPlay').textContent='▶'; }
+  setText('btnPlay','❚❚'); }
+function pause(){ if(usesElement()) video.pause(); else { engine.pause(); if(song&&song.kind==='video') video.pause(); } setText('btnPlay','▶'); }
 function stopSong(silent){
   stopRecording();
   engine.unload(); video.pause(); video.removeAttribute('src'); video.load();
   if(videoUrl){ URL.revokeObjectURL(videoUrl); videoUrl=null; }
   cdg.load(null); song=null; currentId=null;
   video.style.display='none'; pCanvas.style.display='block';
-  $('np').textContent='Nothing playing'; $('btnPlay').textContent='▶'; $('btnPlay').disabled=true; $('btnStop').disabled=true;
+  $('np').textContent='Nothing playing'; setText('btnPlay','▶'); $('btnPlay').disabled=true; $('btnStop').disabled=true;
   updateKeyUI(); if(!silent) renderPlaylist();
 }
 function seek(t){ if(!song) return; if(usesElement()) video.currentTime=t; else { engine.seek(t); if(song.kind==='video') video.currentTime=engine.position(); } }
@@ -603,10 +611,15 @@ function changeKey(d){ const it=current(); if(!it||usesElement()) return; it.key
 $('keyUp').onclick=()=>changeKey(1); $('keyDown').onclick=()=>changeKey(-1);
 
 const typing = t => t && (t.tagName==='TEXTAREA' || t.tagName==='SELECT' || t.isContentEditable || (t.tagName==='INPUT' && t.type==='text'));
-const MODALS=['foldersModal','reportModal','guideModal','chooseModal'];
+const MODALS=['foldersModal','reportModal','guideModal','chooseModal','nameModal','burnModal'];
 const modalOpen = () => MODALS.some(id=>$(id).style.display!=='none');
+const shown = id => $(id).style.display!=='none';
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ for(const id of [...MODALS,'mixPanel']) $(id).style.display='none'; return; }
+  if(e.key==='Escape'){
+    if(shown('nameModal')) return;                          // the name box handles Escape itself
+    if(shown('chooseModal')) return $('chooseCancel').click(); // so the waiting choice is cancelled properly
+    if(shown('burnModal')) return $('burnClose').click();      // refuses while a CD is being written
+    for(const id of ['foldersModal','reportModal','guideModal','mixPanel']) $(id).style.display='none'; return; }
   if(e.key==='F1'){ e.preventDefault(); openGuide(); return; }
   if(typing(e.target) || modalOpen()) return;
   if(e.code==='Space'){ e.preventDefault(); if(song) $('btnPlay').click(); }
@@ -635,8 +648,8 @@ $('outDev').onchange=()=>{ const o=$('outDev').selectedOptions[0]; window.api.lo
 if(navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', ()=>{ listOutputs(); listInputs(); });
 
 /* ================= RECORDING =================
-   Records the mixer's USB input (its main mix: the mic with the mixer's effects plus the
-   karaoke track) and saves an MP3 to Documents\Karaoke Recordings. */
+   The mixer sends only the mic over USB. The recording is mixed here: mic (Mic fader) + the song
+   itself (Music fader), saved as an MP3 in Documents\Karaoke Recordings, or straight into a CD project. */
 const rec = { stream:null, src:null, node:null, mute:null, analyser:null, worker:null, active:false, started:0,
   title:'', armed: localStorage.getItem('kp.rec')==='1', pending:[], workletReady:false, level:0 };
 const recAudio = new Audio();
@@ -702,7 +715,8 @@ function stopRecording(){
   if(!rec.active) return Promise.resolve();
   rec.active=false; if(rec.node) rec.node.port.postMessage('stop');
   const secs=(performance.now()-rec.started)/1000;
-  const job={title: recState.target ? rec.songTitle : rec.title, project:recState.target||null, keep:secs>=3};   // CD tracks are named by song title            // throw away accidental 1–2 second takes
+  // CD-project tracks are named by song title; loose ones by "Artist - Title - date". Takes under 3 s are thrown away.
+  const job={title: recState.target ? rec.songTitle : rec.title, project:recState.target||null, keep:secs>=3};
   const done=new Promise(res=>{ job.done=res; });
   rec.pending.push(job);
   rec.worker.postMessage({type:'stop'});
@@ -725,7 +739,7 @@ async function finishSave(data){
 function updateRecUI(){
   $('btnRec').classList.toggle('on', rec.armed);
   $('btnRec').textContent = rec.armed ? '● REC ON' : '● REC';
-  if(!rec.active) $('recInfo').textContent='';
+  if(!rec.active) setText('recInfo','');
 }
 $('btnRec').onclick=()=>{
   rec.armed=!rec.armed; localStorage.setItem('kp.rec', rec.armed?'1':'0');
@@ -735,11 +749,11 @@ $('btnRec').onclick=()=>{
 };
 const meterBuf=new Float32Array(1024);
 function recTick(){
-  if(rec.active) $('recInfo').textContent='● REC '+fmt((performance.now()-rec.started)/1000);
+  if(rec.active) setText('recInfo','● REC '+fmt((performance.now()-rec.started)/1000));
   let peak=0;
   if(rec.analyser){ rec.analyser.getFloatTimeDomainData(meterBuf); for(let i=0;i<meterBuf.length;i++){ const v=Math.abs(meterBuf[i]); if(v>peak) peak=v; } }
-  rec.level=Math.max(peak, rec.level*0.9);
-  $('meterFill').style.width=Math.min(100, rec.level*100)+'%';
+  rec.level=Math.max(peak, rec.level*0.9); if(rec.level<0.002) rec.level=0;
+  setIf('meterFill','width', Math.min(100, rec.level*100).toFixed(1)+'%');
   if($('mixPanel').style.display!=='none'){
     let mp=0; if(rec.mixAnalyser){ rec.mixAnalyser.getFloatTimeDomainData(meterBuf); for(let i=0;i<meterBuf.length;i++){ const v=Math.abs(meterBuf[i]); if(v>mp) mp=v; } }
     rec.mixLevel=Math.max(mp,(rec.mixLevel||0)*0.9);
@@ -858,7 +872,7 @@ async function openBurn(project){
   $('burnModal').style.display='flex';
   burnUI('Looking for the burner…','',0,false);
   await burnCheck();
-  clearInterval(burn.timer); burn.timer=setInterval(()=>{ if(burn.phase==='waiting') burnCheck(); }, 4000);
+  clearInterval(burn.timer); burn.timer=setInterval(()=>{ if(burn.phase==='waiting') burnCheck(); }, 5000);
 }
 /** MP3 -> CD audio: 44.1 kHz, 16-bit stereo, at least 4 s, padded to whole 2352-byte sectors. */
 async function toCdAudio(bytes){
@@ -875,6 +889,7 @@ $('burnGo').onclick=async()=>{
   if(burn.phase!=='ready') return;
   clearInterval(burn.timer);
   if(song && isPlaying()) pause();
+  if(rec.active) stopRecording();
   recAudioStop();
   burn.phase='preparing';
   const n=burn.tracks.length;
@@ -889,6 +904,8 @@ $('burnGo').onclick=async()=>{
     burnUI('Burning… please wait.', 'Don’t unplug the burner or close the app.', 15, false);
     const r=await window.api.burnStart(burn.dir, burn.project);
     if(r.type==='done'){ burn.phase='done'; burnUI('✓ Done! The CD is ready.', 'It popped out of the burner. It plays in any CD player.', 100, false); toast('CD finished: '+burn.project, 6000); }
+    else if(r.type==='status'){ burn.phase='waiting';   // the disc or burner went away before writing started: nothing was written
+      burnUI(r.reason==='no-burner'?'The burner was unplugged.':'The blank CD was taken out.', 'Nothing was written. Put it back and click Check again.', 0, false); }
     else { burn.phase='waiting'; noteError('CD burn failed: '+(r.message||r.reason));
       burnUI('The CD didn’t finish.', (r.message||'')+'  That disc may not be usable. Put in a new blank CD-R and click Check again. (A report was noted; you can send it with Report a Problem.)', 0, false); }
   }catch(e){
@@ -992,7 +1009,12 @@ function fit(ctx, W, H, src, sw, sh, smooth){
   ctx.imageSmoothingEnabled=smooth; ctx.drawImage(src,(W-w)/2,(H-h)/2,w,h);
 }
 function drawScreen(canvas){
-  const W=canvas.width, H=canvas.height, c=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  // what would be drawn; skip the redraw when it's the same as last time (videos change every frame)
+  const n0=!song&&nextItem();
+  const key = song&&song.kind==='video' ? 'v'+video.currentTime : song&&song.kind==='cdg' ? 'c'+cdg.version : song ? 's'+song.item.name : 'i'+(n0?n0.name:'');
+  if(canvas._drawn===key+W+'x'+H) return; canvas._drawn=key+W+'x'+H;
+  const c=canvas.getContext('2d');
   c.fillStyle='#000'; c.fillRect(0,0,W,H);
   if(song && song.kind==='video' && video.videoWidth){ fit(c,W,H,video,video.videoWidth,video.videoHeight,true); return; }
   if(song && song.kind==='cdg'){ fit(c,W,H,cdg.canvas,300,216,false); return; }
@@ -1011,6 +1033,9 @@ function wrapText(c, t, x, y, maxW, lh){
 
 /* ================= MAIN LOOP ================= */
 let lastTick=0, lastAwake=null;
+const lastVals={};   // only touch the page when a value actually changes
+function setText(id,v){ if(lastVals[id]!==v){ lastVals[id]=v; $(id).textContent=v; } }
+function setIf(id,prop,v){ const k=id+'.'+prop; if(lastVals[k]!==v){ lastVals[k]=v; $(id).style[prop]=v; } }
 function tick(){
   const now=performance.now(); if(now-lastTick<12) return; lastTick=now;
   const p=pos(), d=dur();
@@ -1021,10 +1046,10 @@ function tick(){
       else if(!video.paused) video.pause();
     }
   }
-  $('fill').style.width = d? (p/d*100)+'%' : '0';
+  setIf('fill','width', d? (p/d*100).toFixed(2)+'%' : '0');
   recTick();
-  $('tCur').textContent=fmt(p); $('tDur').textContent=fmt(d);
-  if(song) $('btnPlay').textContent = isPlaying()?'❚❚':'▶';
+  setText('tCur',fmt(p)); setText('tDur',fmt(d));
+  if(song) setText('btnPlay', isPlaying()?'❚❚':'▶');
   const awake = !!((song && isPlaying()) || (tv && !tv.closed) || rec.active || burn.phase==='preparing' || burn.phase==='burning');
   if(awake!==lastAwake){ lastAwake=awake; window.api.keepAwake(awake); }
   if(pCanvas.style.display!=='none') drawScreen(pCanvas);
@@ -1056,6 +1081,7 @@ window.api.onUpdateReady(v=>{
   $('update').style.display='flex';
 });
 $('btnUpdate').onclick=async()=>{
+  if(burn.phase==='preparing'||burn.phase==='burning') return toast('Wait until the CD is finished, then update.', 5000);
   if(song && isPlaying() && !confirm('A song is playing. Stop it and restart to update now?')) return;
   stopSong(); busy(true,'Saving and restarting…'); await recordingsSettled(); window.api.installUpdate();
 };

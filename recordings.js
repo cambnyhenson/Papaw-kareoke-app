@@ -18,8 +18,9 @@ function clean(name, fallback) {
 }
 function projDir(project) {
   if (!project) return root();
-  const p = clean(project, null);
-  if (!p || p !== project) throw new Error('Bad project name');
+  // any folder inside Karaoke Recordings is a project (even one made in File Explorer)
+  const p = String(project);
+  if (!p.trim() || /[\\/]/.test(p) || p === '.' || p === '..') throw new Error('Bad project name');
   return path.join(root(), p);
 }
 function filePath(project, file) {
