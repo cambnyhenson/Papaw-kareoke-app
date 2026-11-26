@@ -820,14 +820,90 @@ $('btnProjDelete').onclick=async()=>{
   if(!confirm('Delete the project "'+p+'"'+(info&&info.tracks?' and its '+info.tracks+' recordings':'')+'? It goes to the Recycle Bin, so it can be brought back.')) return;
   recAudioStop(); await window.api.projDelete(p); recState.project=''; localStorage.setItem('kp.recProject',''); await showRecordings();
 };
-$('btnProjBurn').onclick=async()=>{
-  const p=recState.project; if(!p) return;
-  const info=recState.projects.find(x=>x.name===p);
-  if(info && info.secs>80*60 && !confirm('This project is '+mmss(info.secs)+' long, more than fits on one CD (80:00). Burn anyway? (Windows Media Player will split it across CDs.)')) return;
-  try{ const r=await window.api.projBurn(p);
-    toast(r.player ? 'Windows Media Player is opening. Put a blank CD in, click its Burn tab (Audio CD), then Start burn.' : 'The project folder is open. Windows Media Player wasn’t found; see the User Guide, Projects and CDs.', 12000); }
-  catch(e){ toast(errText(e),6000); }
+/* ---- Burn CD, all inside the app (Windows' own burning engine does the writing) ---- */
+const burn={ project:null, tracks:[], phase:'idle', timer:null, dir:null };
+const SECTORS_PER_SEC=75, GAP_SECTORS=150;   // CD audio: 75 sectors a second, 2-second gap per track
+function burnUI(status, detail, pct, canBurn){
+  $('burnStatus').textContent=status; $('burnDetail').textContent=detail||'';
+  $('burnFill').style.width=(pct||0)+'%'; $('burnGo').disabled=!canBurn;
+  const busyNow=burn.phase==='preparing'||burn.phase==='burning';
+  $('burnClose').disabled=busyNow; $('burnCheck').style.display=busyNow||burn.phase==='done'?'none':'';
+  $('burnGo').style.display=burn.phase==='done'?'none':'';
+}
+async function burnCheck(){
+  if(burn.phase!=='checking'&&burn.phase!=='waiting') return;
+  const secs=burn.tracks.reduce((s,t)=>s+t.secs,0), need=Math.ceil(secs*SECTORS_PER_SEC)+GAP_SECTORS*burn.tracks.length;
+  const r=await window.api.burnCheck();
+  if(burn.phase!=='checking'&&burn.phase!=='waiting') return;
+  const plan=burn.tracks.length+' songs · '+mmss(secs);
+  const msgs={
+    'not-windows':['Burning only works on the Windows computer.',''],
+    'no-burner':['No CD burner found.','Plug in the USB DVD burner, wait a few seconds, then click Check again.'],
+    'cannot-burn-cds':['This drive can’t burn music CDs.','The drive '+(r.burner||'')+' can read discs but not write CDs.'],
+    'no-blank-cd':['Put a blank CD-R in the burner.','Found the burner'+(r.burner?' ('+r.burner+')':'')+'. Press its button to open the tray, put in a blank CD-R, close it, and wait a few seconds. This CD will be '+plan+'.'],
+  };
+  if(r.type==='error'){ burn.phase='waiting'; burnUI('Couldn’t talk to the burner.', r.message+'  Click Check again.', 0, false); return; }
+  if(r.reason!=='ready'){ burn.phase='waiting'; const [s,d]=msgs[r.reason]||['Not ready.','']; burnUI(s,d,0,false); return; }
+  if(r.freeSectors && need>r.freeSectors){ burn.phase='waiting';
+    burnUI('Too long for this CD.', 'These songs need '+mmss(need/SECTORS_PER_SEC)+' but the CD has room for '+mmss(r.freeSectors/SECTORS_PER_SEC)+'. Take a few songs out of the project, or move them to a second project.',0,false); return; }
+  burn.phase='ready';
+  burnUI('Ready to burn.', 'Blank CD found'+(r.burner?' in '+r.burner:'')+'. This CD will be '+plan+(r.freeSectors?' of '+mmss(r.freeSectors/SECTORS_PER_SEC)+'.':'.')+' Click Burn CD.',0,true);
+}
+async function openBurn(project){
+  const tracks=await window.api.recList(project);
+  if(!tracks.length) return toast('This project has no songs yet.');
+  if(tracks.length>99) return toast('A CD can hold at most 99 songs.');
+  Object.assign(burn,{project, tracks, phase:'checking'});
+  $('burnTitle').textContent='💿 Burn CD: '+project;
+  $('burnModal').style.display='flex';
+  burnUI('Looking for the burner…','',0,false);
+  await burnCheck();
+  clearInterval(burn.timer); burn.timer=setInterval(()=>{ if(burn.phase==='waiting') burnCheck(); }, 4000);
+}
+/** MP3 -> CD audio: 44.1 kHz, 16-bit stereo, at least 4 s, padded to whole 2352-byte sectors. */
+async function toCdAudio(bytes){
+  const ac=new OfflineAudioContext(2, 44100, 44100);
+  const buf=await ac.decodeAudioData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset+bytes.byteLength));
+  const L=buf.getChannelData(0), R=buf.numberOfChannels>1?buf.getChannelData(1):L;
+  let frames=Math.max(buf.length, 4*44100); frames=Math.ceil(frames/588)*588;
+  const out=new Int16Array(frames*2);
+  for(let i=0;i<buf.length;i++){ const l=Math.max(-1,Math.min(1,L[i])), r=Math.max(-1,Math.min(1,R[i]));
+    out[2*i]=l<0?l*0x8000:l*0x7FFF; out[2*i+1]=r<0?r*0x8000:r*0x7FFF; }
+  return new Uint8Array(out.buffer);
+}
+$('burnGo').onclick=async()=>{
+  if(burn.phase!=='ready') return;
+  clearInterval(burn.timer);
+  if(song && isPlaying()) pause();
+  recAudioStop();
+  burn.phase='preparing';
+  const n=burn.tracks.length;
+  try{
+    burn.dir=await window.api.burnPrepare();
+    for(let i=0;i<n;i++){
+      burnUI('Getting the songs ready… '+(i+1)+' of '+n, burn.tracks[i].title, Math.round(15*i/n), false);
+      const pcm=await toCdAudio(await window.api.recRead(burn.project, burn.tracks[i].name));
+      await window.api.burnWrite(burn.dir, i+1, pcm);
+    }
+    burn.phase='burning';
+    burnUI('Burning… please wait.', 'Don’t unplug the burner or close the app.', 15, false);
+    const r=await window.api.burnStart(burn.dir, burn.project);
+    if(r.type==='done'){ burn.phase='done'; burnUI('✓ Done! The CD is ready.', 'It popped out of the burner. It plays in any CD player.', 100, false); toast('CD finished: '+burn.project, 6000); }
+    else { burn.phase='waiting'; noteError('CD burn failed: '+(r.message||r.reason));
+      burnUI('The CD didn’t finish.', (r.message||'')+'  That disc may not be usable. Put in a new blank CD-R and click Check again. (A report was noted; you can send it with Report a Problem.)', 0, false); }
+  }catch(e){
+    burn.phase='waiting'; window.api.burnCleanup(burn.dir); noteError('CD prepare failed: '+errText(e));
+    burnUI('Couldn’t get the songs ready.', errText(e), 0, false);
+  }
 };
+window.api.onBurnEvent(ev=>{
+  const n=burn.tracks.length;
+  if(ev.type==='track') burnUI('Burning song '+ev.n+' of '+ev.of+'…', (burn.tracks[ev.n-1]||{}).title+'  ·  Don’t unplug the burner or close the app.', 15+Math.round(80*(ev.n-1)/ev.of), false);
+  if(ev.type==='closing') burnUI('Finishing the CD…', 'This last step can take a minute or two.', 96, false);
+});
+$('burnCheck').onclick=()=>{ if(burn.phase==='waiting'||burn.phase==='ready'){ burn.phase='checking'; burnUI('Checking…','',0,false); burnCheck(); } };
+$('burnClose').onclick=()=>{ if(burn.phase==='preparing'||burn.phase==='burning') return; clearInterval(burn.timer); burn.phase='idle'; $('burnModal').style.display='none'; };
+$('btnProjBurn').onclick=()=>{ if(recState.project) openBurn(recState.project); };
 $('btnRecFolder').onclick=()=>window.api.recFolder(recState.project||null);
 
 async function showRecordings(){
@@ -949,7 +1025,7 @@ function tick(){
   recTick();
   $('tCur').textContent=fmt(p); $('tDur').textContent=fmt(d);
   if(song) $('btnPlay').textContent = isPlaying()?'❚❚':'▶';
-  const awake = !!((song && isPlaying()) || (tv && !tv.closed) || rec.active);
+  const awake = !!((song && isPlaying()) || (tv && !tv.closed) || rec.active || burn.phase==='preparing' || burn.phase==='burning');
   if(awake!==lastAwake){ lastAwake=awake; window.api.keepAwake(awake); }
   if(pCanvas.style.display!=='none') drawScreen(pCanvas);
   if(tv && !tv.closed && tvCanvas){
@@ -1024,4 +1100,4 @@ $('guideToc').addEventListener('click', e=>{ const a=e.target.closest('a'); if(!
   document.getElementById(a.getAttribute('href').slice(1)).scrollIntoView({behavior:'smooth'}); });
 window.api.onOpenGuide && window.api.onOpenGuide(()=>openGuide());
 
-window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec,recMix,applyRecMix,saved:()=>saved,recState,showRecordings};
+window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec,recMix,applyRecMix,saved:()=>saved,recState,showRecordings,burn,toCdAudio};

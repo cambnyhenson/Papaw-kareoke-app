@@ -6,7 +6,6 @@ const { app, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
-const { spawn } = require('child_process');
 
 const AUDIO = /\.(mp3|wav|webm|m4a)$/i;
 const BYTES_PER_SEC = 24000; // our recordings are 192 kbps MP3
@@ -154,13 +153,4 @@ module.exports = {
   remove: async (project, file) => { await shell.trashItem(filePath(project, file)); if (project) await renumber(project); return true; },
   show: (project, file) => shell.showItemInFolder(filePath(project, file)),
   async openFolder(project) { const d = projDir(project); await fsp.mkdir(d, { recursive: true }); return shell.openPath(d); },
-
-  /** Open the project's track list in Windows Media Player (Burn tab makes the audio CD). */
-  async burn(project) {
-    const dir = projDir(project); const files = await renumber(project);
-    if (!files.length) throw new Error('This project has no tracks yet');
-    const wmp = ['C:\\Program Files\\Windows Media Player\\wmplayer.exe', 'C:\\Program Files (x86)\\Windows Media Player\\wmplayer.exe'].find(p => fs.existsSync(p));
-    if (wmp) { spawn(wmp, [path.join(dir, project + '.m3u8')], { detached: true, stdio: 'ignore' }).unref(); return { player: true }; }
-    await shell.openPath(dir); return { player: false };
-  },
 };

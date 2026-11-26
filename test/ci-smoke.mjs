@@ -76,6 +76,13 @@ check((await pg.$$eval('#recList .row .t', e => e.map(x => x.textContent))).join
 await pg.click('#btnProjDelete'); await pg.waitForTimeout(500);
 await pg.click('#tabLib');
 
+// CD burner check: on Windows the burn script must run and reach Windows' burning engine (IMAPI2)
+const bc = await pg.evaluate(() => window.api.burnCheck());
+console.log('INFO burner check:', JSON.stringify(bc));
+const comMissing = bc.type === 'error' && /80040154|not registered|REGDB_E_CLASSNOTREG/i.test(bc.message || '');
+if (comMissing) console.log('WARN this machine has no Windows CD burning engine; skipping the burner check');
+else check(bc.type === 'status', 'CD burner check runs (' + (bc.reason || bc.message) + ')');
+
 await pg.click('#btnMix');
 check(await pg.isVisible('#mixPanel'), 'Rec Mix panel opens');
 await pg.keyboard.press('Escape');

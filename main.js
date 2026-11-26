@@ -67,6 +67,12 @@ function createWindow() {
   });
   // Closing the app: let the page finish saving a recording first (max 10 s).
   win.on('close', e => {
+    if (burner.isBurning()) {
+      const r = dialog.showMessageBoxSync(win, { type: 'warning', title: 'The Butcher Karaoke', noLink: true, defaultId: 0, cancelId: 0,
+        message: 'A CD is being burned right now.', detail: 'Closing the app now will ruin the CD. Wait for it to finish?',
+        buttons: ['Keep burning', 'Close anyway'] });
+      if (r === 0) { e.preventDefault(); return; }
+    }
     if (closeReady) return;
     e.preventDefault();
     win.webContents.send('app-closing');
@@ -164,7 +170,17 @@ ipcMain.handle('rec-reorder', (_e, project, order) => recs.reorder(project, orde
 ipcMain.handle('proj-create', (_e, name) => recLog('project created ' + name, recs.projectCreate(name)));
 ipcMain.handle('proj-rename', (_e, from, to) => recLog(`project renamed ${from} -> ${to}`, recs.projectRename(from, to)));
 ipcMain.handle('proj-delete', (_e, name) => recLog('project deleted ' + name, recs.projectDelete(name)));
-ipcMain.handle('proj-burn', (_e, name) => recLog('burn ' + name, recs.burn(name)));
+const burner = require('./burner');
+ipcMain.handle('burn-check', () => burner.check());
+ipcMain.handle('burn-prepare', () => burner.prepare());
+ipcMain.handle('burn-write', (_e, dir, i, bytes) => burner.writeTrack(dir, i, bytes));
+ipcMain.handle('burn-cleanup', (_e, dir) => burner.cleanup(dir));
+ipcMain.handle('burn-start', async (e, dir, project) => {
+  log('info', 'burning CD:', project);
+  const r = await burner.burn(dir, ev => { log('info', 'burn:', JSON.stringify(ev)); if (!e.sender.isDestroyed()) e.sender.send('burn-event', ev); });
+  log(r.type === 'done' ? 'info' : 'error', 'burn finished:', JSON.stringify(r));
+  return r;
+});
 
 ipcMain.handle('has-tv', () => tvDisplay().external);
 ipcMain.handle('close-ready', () => { closeReady = true; if (win) win.close(); });

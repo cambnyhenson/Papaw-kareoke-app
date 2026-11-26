@@ -230,7 +230,8 @@
 <li>Recordings made before can be moved in: pick <b>Not in a project yet</b> at the top, then click <b>📁</b> next to a recording and pick the project.</li>
 <li>In a project, <b>▲ ▼</b> change the track order, <b>✏️ Rename</b> changes a track's name, and <b>🗑</b> removes a track (to the Recycle Bin).</li>
 <li>The line under the buttons shows how long the CD will be. One CD holds up to <b>80 minutes</b>.</li>
-<li>When it's ready, put a blank CD-R in the CD drive and click <b>💿 Burn CD</b>. Windows Media Player opens with the songs in order. Click its <b>Burn</b> tab, make sure it says <b>Audio CD</b>, drag the songs into the burn list if they aren't there, and click <b>Start burn</b>.</li>
+<li>When it's ready, click <b>💿 Burn CD</b>. The app checks the USB burner and asks for a blank <b>CD-R</b>. Put one in, wait a few seconds, and when it says <b>Ready</b>, click <b>Burn CD</b>. A bar shows each track being written. Don't unplug the burner or close the app until it says <b>Done</b>; the CD pops out by itself when it's finished.</li>
+<li>The CD plays in any CD player, car or home. Use <b>CD-R</b> discs (CD-RW discs don't play in many car stereos). A DVD won't work as a music CD.</li>
 </ol>
 <p>Each project is a normal folder inside <b>Documents › Karaoke Recordings</b>, so the songs can also be copied to a USB stick or sent to family.</p></section>
 
@@ -302,6 +303,17 @@
     <h3 id="chooseTitle">Add to which playlist?</h3>
     <div class="list" id="chooseList"></div>
     <div class="mrow" style="justify-content:flex-end"><button id="chooseNew">+ New Playlist</button><button id="chooseCancel">Cancel</button></div>
+  </div>
+</div>
+<div class="modal" id="burnModal" style="display:none">
+  <div class="box" style="width:min(640px,94vw)" role="dialog" aria-labelledby="burnTitle">
+    <h3 id="burnTitle">💿 Burn CD</h3>
+    <div class="burnstatus" id="burnStatus"></div>
+    <div class="bigbar"><div id="burnFill"></div></div>
+    <div class="mhelp" id="burnDetail"></div>
+    <div class="mrow" style="justify-content:flex-end">
+      <button id="burnCheck">Check again</button><button id="burnClose">Close</button><button class="primary" id="burnGo" disabled>Burn CD</button>
+    </div>
   </div>
 </div>
 <div class="msg" id="msg"></div>
