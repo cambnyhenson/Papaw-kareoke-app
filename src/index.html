@@ -53,6 +53,19 @@
         <div class="list" id="plList"></div>
       </div>
       <div id="recView" class="view" style="display:none">
+        <div class="pltools">
+          <label for="recProject"><b>Project:</b></label>
+          <select id="recProject" title="Pick a project (a CD), or loose recordings"></select>
+          <button class="primary" id="btnProjNew">+ New Project</button>
+          <button id="btnProjRename">Rename</button>
+          <button id="btnProjBurn" title="Make an audio CD from this project">💿 Burn CD</button>
+          <button id="btnProjDelete" title="Delete this project (to the Recycle Bin)">🗑</button>
+          <div class="note" id="recInfoLine"></div>
+        </div>
+        <div class="pltools">
+          <label for="recTarget"><b>New recordings go to:</b></label>
+          <select id="recTarget"></select>
+        </div>
         <div class="list" id="recList"></div>
       </div>
     </section>
@@ -129,7 +142,7 @@
     <nav class="toc" id="guideToc">
       <a href="#g-start">Getting started</a><a href="#g-sing">Singing a song</a><a href="#g-key">Changing the key</a>
       <a href="#g-playlists">Playlists</a><a href="#g-tv">The TV screen</a><a href="#g-record">Recording</a><a href="#g-recordings">Listening to recordings</a>
-      <a href="#g-songs">Song folders and the drive</a><a href="#g-search">Finding songs</a><a href="#g-text">Bigger text</a>
+      <a href="#g-songs">Song folders and the drive</a><a href="#g-search">Finding songs</a><a href="#g-projects">Projects and CDs</a><a href="#g-text">Bigger text</a>
       <a href="#g-problems">If something goes wrong</a><a href="#g-updates">Updates</a><a href="#g-keys">Keyboard shortcuts</a>
     </nav>
     <div class="guide" id="guideBody">
@@ -199,13 +212,27 @@
 <p>Recordings are saved in <b>Documents › Karaoke Recordings</b>, named with the song and the date.</p></section>
 
 <section id="g-recordings"><h4>Listening to recordings</h4>
-<p>Click the <b>Recordings</b> tab (next to Song Library). Newest recordings are at the top.</p>
+<p>Click the <b>Recordings</b> tab. At the top, pick <b>Not in a project yet</b> to see new recordings (newest first), or pick a project to see its songs in CD order.</p>
 <ul>
 <li><b>▶</b> plays it; <b>■</b> stops it.</li>
+<li><b>✏️</b> renames it (for example, change "How Great Thou Art - 2026-11-25 7.42pm" to "How Great Thou Art").</li>
+<li><b>📁</b> puts it in a project (a CD), or takes it back out.</li>
 <li><b>📂</b> shows the file in its folder, for copying or sending it to family.</li>
 <li><b>🗑</b> deletes it. It goes to the Recycle Bin, so it can still be brought back.</li>
-<li><b>Open Folder</b> opens the whole recordings folder.</li>
+<li><b>Open Folder</b> opens the folder for what's shown.</li>
 </ul></section>
+
+<section id="g-projects"><h4>Projects and CDs</h4>
+<p>A <b>project</b> is a group of recordings that will become a CD, like <i>Gospel CD</i>. Its songs are numbered in the order they'll play on the CD.</p>
+<ol>
+<li>Open the <b>Recordings</b> tab and click <b>+ New Project</b>. Type a name, like <i>Gospel CD</i>.</li>
+<li>Next to <b>New recordings go to:</b>, pick that project. Every song you record now goes straight into it as the next track.</li>
+<li>Recordings made before can be moved in: pick <b>Not in a project yet</b> at the top, then click <b>📁</b> next to a recording and pick the project.</li>
+<li>In a project, <b>▲ ▼</b> change the track order, <b>✏️ Rename</b> changes a track's name, and <b>🗑</b> removes a track (to the Recycle Bin).</li>
+<li>The line under the buttons shows how long the CD will be. One CD holds up to <b>80 minutes</b>.</li>
+<li>When it's ready, put a blank CD-R in the CD drive and click <b>💿 Burn CD</b>. Windows Media Player opens with the songs in order. Click its <b>Burn</b> tab, make sure it says <b>Audio CD</b>, drag the songs into the burn list if they aren't there, and click <b>Start burn</b>.</li>
+</ol>
+<p>Each project is a normal folder inside <b>Documents › Karaoke Recordings</b>, so the songs can also be copied to a USB stick or sent to family.</p></section>
 
 <section id="g-songs"><h4>Song folders and the drive</h4>
 <p>Click <b>📁 Song Folders</b> at the top.</p>

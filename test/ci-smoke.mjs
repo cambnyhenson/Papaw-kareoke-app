@@ -66,6 +66,16 @@ await pg.click('#btnClearAll'); await pg.click('#plAll'); await pg.waitForTimeou
 check(await pg.evaluate(() => __kp.playlist().length) === 4, 'Add all to tonight loads the saved playlist');
 await pg.click('#tabLib');
 
+// recordings projects: make a project, save a recording into it through the app's own save path
+await pg.click('#tabRec'); await pg.click('#btnProjNew'); await pg.fill('#nameInput', 'Smoke CD'); await pg.click('#nameOk'); await pg.waitForTimeout(600);
+const saved1 = await pg.evaluate(() => window.api.recSave('Test Song', new Uint8Array(48000), 'Smoke CD'));
+await pg.evaluate(() => __kp.showRecordings()); await pg.waitForTimeout(400);
+check(saved1.project === 'Smoke CD' && /^01 - Test Song\.mp3$/.test(saved1.name) && (await pg.$$eval('#recList .row', e => e.length)) === 1, 'recording saved into a project as track 01');
+await pg.click('#recList .row:nth-child(1) button[title="Rename"]'); await pg.fill('#nameInput', 'Renamed Song'); await pg.click('#nameOk'); await pg.waitForTimeout(500);
+check((await pg.$$eval('#recList .row .t', e => e.map(x => x.textContent))).join() === 'Renamed Song', 'renaming a recording');
+await pg.click('#btnProjDelete'); await pg.waitForTimeout(500);
+await pg.click('#tabLib');
+
 await pg.click('#btnMix');
 check(await pg.isVisible('#mixPanel'), 'Rec Mix panel opens');
 await pg.keyboard.press('Escape');

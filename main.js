@@ -148,37 +148,23 @@ process.on('uncaughtException', async err => {
 process.on('unhandledRejection', err => log('error', 'main process (promise):', err));
 app.on('child-process-gone', (_e, d) => log('warn', 'helper process gone:', d));
 
-/* ---------- recordings (Documents\Karaoke Recordings) ---------- */
-const recDir = () => path.join(app.getPath('documents'), 'Karaoke Recordings');
-const recPath = name => {
-  const full = path.resolve(recDir(), path.basename(name));
-  if (path.dirname(full) !== path.resolve(recDir())) throw new Error('Bad file name');
-  return full;
-};
-function stamp(d = new Date()) {
-  const h = d.getHours() % 12 || 12, ap = d.getHours() < 12 ? 'am' : 'pm';
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${h}.${p(d.getMinutes())}${ap}`;
-}
-ipcMain.handle('rec-save', async (_e, title, bytes) => {
-  await fs.mkdir(recDir(), { recursive: true });
-  const clean = String(title).replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Recording';
-  let name = `${clean} - ${stamp()}.mp3`, n = 2;
-  while (await fs.stat(path.join(recDir(), name)).then(() => true, () => false)) name = `${clean} - ${stamp()} (${n++}).mp3`;
-  await fs.writeFile(path.join(recDir(), name), Buffer.from(bytes));
-  return name;
-});
-ipcMain.handle('rec-list', async () => {
-  let names = [];
-  try { names = (await fs.readdir(recDir())).filter(n => /\.(mp3|wav|webm)$/i.test(n)); } catch { return []; }
-  const out = [];
-  for (const name of names) { try { const st = await fs.stat(path.join(recDir(), name)); out.push({ name, size: st.size, time: st.mtimeMs }); } catch {} }
-  return out.sort((a, b) => b.time - a.time);
-});
-ipcMain.handle('rec-read', async (_e, name) => fs.readFile(recPath(name)));
-ipcMain.handle('rec-delete', async (_e, name) => { await shell.trashItem(recPath(name)); return true; }); // goes to the Recycle Bin
-ipcMain.handle('rec-show', (_e, name) => shell.showItemInFolder(recPath(name)));
-ipcMain.handle('rec-folder', async () => { await fs.mkdir(recDir(), { recursive: true }); return shell.openPath(recDir()); });
+/* ---------- recordings and CD projects (Documents\Karaoke Recordings) ---------- */
+const recs = require('./recordings');
+const recLog = (what, p) => p.then(r => { log('info', 'recordings:', what); return r; });
+ipcMain.handle('rec-save', (_e, title, bytes, project) => recLog('saved ' + title, recs.save(title, bytes, project)));
+ipcMain.handle('rec-list', (_e, project) => recs.list(project || null));
+ipcMain.handle('rec-projects', () => recs.projects());
+ipcMain.handle('rec-read', (_e, project, name) => recs.read(project || null, name));
+ipcMain.handle('rec-delete', (_e, project, name) => recLog('deleted ' + name, recs.remove(project || null, name)));
+ipcMain.handle('rec-show', (_e, project, name) => recs.show(project || null, name));
+ipcMain.handle('rec-folder', (_e, project) => recs.openFolder(project || null));
+ipcMain.handle('rec-rename', (_e, project, name, title) => recLog(`renamed ${name} -> ${title}`, recs.rename(project || null, name, title)));
+ipcMain.handle('rec-move', (_e, project, name, to) => recLog(`moved ${name} -> ${to || '(no project)'}`, recs.move(project || null, name, to || null)));
+ipcMain.handle('rec-reorder', (_e, project, order) => recs.reorder(project, order));
+ipcMain.handle('proj-create', (_e, name) => recLog('project created ' + name, recs.projectCreate(name)));
+ipcMain.handle('proj-rename', (_e, from, to) => recLog(`project renamed ${from} -> ${to}`, recs.projectRename(from, to)));
+ipcMain.handle('proj-delete', (_e, name) => recLog('project deleted ' + name, recs.projectDelete(name)));
+ipcMain.handle('proj-burn', (_e, name) => recLog('burn ' + name, recs.burn(name)));
 
 ipcMain.handle('has-tv', () => tvDisplay().external);
 ipcMain.handle('close-ready', () => { closeReady = true; if (win) win.close(); });

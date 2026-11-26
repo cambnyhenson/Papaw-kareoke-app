@@ -454,29 +454,31 @@ $('btnSavePl').onclick=async()=>{
   await savePl(); toast('Saved playlist "'+n+'" ('+items.length+' songs)', 4000);
   if($('plView').style.display!=='none') renderPlaylists();
 };
-let chooseFor=null;
-function chooseSavedPlaylist(s){
-  chooseFor=s; $('chooseTitle').textContent='Add "'+s.name+'" to which playlist?';
-  const box=$('chooseList'); box.innerHTML='';
-  if(!saved.lists.length) box.innerHTML='<div class="empty">No playlists yet. Click + New Playlist.</div>';
-  for(const l of [...saved.lists].sort((a,b)=>collator.compare(a.name,b.name))){
-    const r=document.createElement('div'); r.className='row';
-    r.innerHTML='<div class="name"><div class="t"></div></div><button>Add here</button>';
-    r.querySelector('.t').textContent=l.name+'  ('+l.items.length+')';
-    r.onclick=()=>addToSaved(l);
-    box.appendChild(r);
-  }
-  $('chooseModal').style.display='flex';
+/** Pick one of several choices in a box. Resolves to the chosen value, '__new__', or null. */
+function pickFrom(title, items, newLabel){
+  return new Promise(res=>{
+    $('chooseTitle').textContent=title; const box=$('chooseList'); box.innerHTML='';
+    const done=v=>{ $('chooseModal').style.display='none'; $('chooseCancel').onclick=$('chooseNew').onclick=null; res(v); };
+    if(!items.length) box.innerHTML='<div class="empty">Nothing here yet.'+(newLabel?' Click '+newLabel+'.':'')+'</div>';
+    for(const it of items){ const r=document.createElement('div'); r.className='row';
+      r.innerHTML='<div class="name"><div class="t"></div></div><button>Pick</button>'; r.querySelector('.t').textContent=it.label;
+      r.onclick=()=>done(it.value); box.appendChild(r); }
+    $('chooseNew').style.display=newLabel?'':'none'; $('chooseNew').textContent=newLabel||'';
+    $('chooseNew').onclick=()=>done('__new__'); $('chooseCancel').onclick=()=>done(null);
+    $('chooseModal').style.display='flex';
+  });
 }
-async function addToSaved(l){
-  $('chooseModal').style.display='none'; const s=chooseFor; if(!s) return;
+async function chooseSavedPlaylist(s){
+  const lists=[...saved.lists].sort((a,b)=>collator.compare(a.name,b.name));
+  const v=await pickFrom('Add "'+s.name+'" to which playlist?', lists.map(l=>({label:l.name+'  ('+l.items.length+')', value:l.id})), '+ New Playlist');
+  if(!v) return;
+  let l;
+  if(v==='__new__'){ const n=await askName('New playlist name'); if(!n) return; l={id:uid(), name:uniqueName(n), items:[]}; saved.lists.push(l); }
+  else l=saved.lists.find(x=>x.id===v);
   if(l.items.some(it=>songOf(it)===s)) return toast('"'+s.name+'" is already on '+l.name+'.');
   l.items.push(itemFromSong(s)); await savePl(); toast('Added to '+l.name+': '+s.name, 3000);
   if($('plView').style.display!=='none') renderPlaylists();
 }
-$('chooseCancel').onclick=()=>{ $('chooseModal').style.display='none'; };
-$('chooseNew').onclick=async()=>{ $('chooseModal').style.display='none'; const n=await askName('New playlist name'); if(!n) return;
-  const l={id:uid(), name:uniqueName(n), items:[]}; saved.lists.push(l); await addToSaved(l); };
 
 async function importSpp(){
   if(!confirm('Bring in the lists from Show Presenter Pro? Each name used there (like "Elvis" or "E Gospel") becomes a playlist here. Nothing in Show Presenter is changed.')) return;
@@ -693,14 +695,14 @@ function startRecording(title){
     rec.worker.onerror=e=>{ noteError('recording worker: '+e.message); while(rec.pending.length) finishSave({error:e.message}); }; }
   rec.worker.postMessage({type:'start', sampleRate:engine.ctx.sampleRate});
   rec.node.port.postMessage('start');
-  rec.active=true; rec.started=performance.now(); rec.title=title;
+  rec.active=true; rec.started=performance.now(); rec.title=title; rec.songTitle=(song&&library.get(song.item.path)||{}).title||title;
   updateRecUI(); return true;
 }
 function stopRecording(){
   if(!rec.active) return Promise.resolve();
   rec.active=false; if(rec.node) rec.node.port.postMessage('stop');
   const secs=(performance.now()-rec.started)/1000;
-  const job={title:rec.title, keep:secs>=3};            // throw away accidental 1–2 second takes
+  const job={title: recState.target ? rec.songTitle : rec.title, project:recState.target||null, keep:secs>=3};   // CD tracks are named by song title            // throw away accidental 1–2 second takes
   const done=new Promise(res=>{ job.done=res; });
   rec.pending.push(job);
   rec.worker.postMessage({type:'stop'});
@@ -714,8 +716,8 @@ async function finishSave(data){
   try{
     if(data && data.error){ noteError('recording encoder: '+data.error); toast('The recording could not be saved (encoder problem).', 8000); return; }
     if(!job.keep) return;
-    const name=await window.api.recSave(job.title, data); toast('Recording saved: '+name, 5000);
-    window.api.log('info','recording saved: '+name);
+    const r=await window.api.recSave(job.title, data, job.project);
+    toast(r.project ? 'Recording saved in "'+r.project+'" as '+r.name : 'Recording saved: '+r.name, 5000);
     if($('recView').style.display!=='none') showRecordings();
   }catch(e){ noteError('could not save recording: '+(e.stack||e)); toast('Could not save the recording: '+e.message, 8000); }
   finally{ job.done(); }
@@ -776,35 +778,113 @@ function showTab(which){
   if(which==='pl') renderPlaylists();
 }
 $('tabLib').onclick=()=>showTab('lib'); $('tabPl').onclick=()=>showTab('pl'); $('tabRec').onclick=()=>showTab('rec');
-$('btnRecFolder').onclick=()=>window.api.recFolder();
 function recAudioStop(){ recAudio.pause(); if(recAudio.src){ URL.revokeObjectURL(recAudio.src); recAudio.removeAttribute('src'); } recPlaying=null; }
 recAudio.onended=()=>{ recAudioStop(); showRecordings(); };
+const recState={ project: localStorage.getItem('kp.recProject')||'', target: localStorage.getItem('kp.recTarget')||'', projects:[] };
+const mmss = s => { s=Math.round(s); const h=s/3600|0, m=(s%3600)/60|0; return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s%60).padStart(2,'0'); };
+const errText = e => String(e && e.message || e).replace(/^.*Error: /,'');
+async function refreshProjects(){
+  try{ recState.projects=await window.api.recProjects(); }catch(e){ recState.projects=[]; }
+  const names=recState.projects.map(p=>p.name);
+  if(recState.project && !names.includes(recState.project)) recState.project='';
+  if(recState.target && !names.includes(recState.target)) recState.target='';
+  for(const [id,val,loose] of [['recProject',recState.project,'Not in a project yet'],['recTarget',recState.target,'Not in a project (sort later)']]){
+    const sel=$(id); sel.innerHTML='';
+    const o=document.createElement('option'); o.value=''; o.textContent=loose; sel.appendChild(o);
+    for(const p of recState.projects){ const x=document.createElement('option'); x.value=p.name; x.textContent='💿 '+p.name+'  ('+p.tracks+')'; sel.appendChild(x); }
+    sel.value=val;
+  }
+  const inProj=!!recState.project;
+  for(const id of ['btnProjRename','btnProjBurn','btnProjDelete']) $(id).style.display=inProj?'':'none';
+}
+$('recProject').onchange=e=>{ recState.project=e.target.value; localStorage.setItem('kp.recProject',recState.project); recAudioStop(); showRecordings(); };
+$('recTarget').onchange=e=>{ recState.target=e.target.value; localStorage.setItem('kp.recTarget',recState.target);
+  toast(recState.target ? 'New recordings will go into "'+recState.target+'".' : 'New recordings will be kept loose (not in a project).', 3500); };
+$('btnProjNew').onclick=async()=>{
+  const n=await askName('Name of the new project (CD), e.g. Gospel CD'); if(!n) return;
+  try{ const p=await window.api.projCreate(n); recState.project=p; localStorage.setItem('kp.recProject',p);
+    if(confirm('Put new recordings straight into "'+p+'"?')){ recState.target=p; localStorage.setItem('kp.recTarget',p); }
+    await showRecordings(); toast('Project "'+p+'" made.',3000); }
+  catch(e){ toast(errText(e),5000); }
+};
+$('btnProjRename').onclick=async()=>{
+  const old=recState.project; if(!old) return;
+  const n=await askName('Rename project', old); if(!n||n===old) return;
+  try{ const p=await window.api.projRename(old,n); if(recState.target===old){ recState.target=p; localStorage.setItem('kp.recTarget',p); }
+    recState.project=p; localStorage.setItem('kp.recProject',p); recAudioStop(); await showRecordings(); }
+  catch(e){ toast(errText(e),5000); }
+};
+$('btnProjDelete').onclick=async()=>{
+  const p=recState.project; if(!p) return;
+  const info=recState.projects.find(x=>x.name===p);
+  if(!confirm('Delete the project "'+p+'"'+(info&&info.tracks?' and its '+info.tracks+' recordings':'')+'? It goes to the Recycle Bin, so it can be brought back.')) return;
+  recAudioStop(); await window.api.projDelete(p); recState.project=''; localStorage.setItem('kp.recProject',''); await showRecordings();
+};
+$('btnProjBurn').onclick=async()=>{
+  const p=recState.project; if(!p) return;
+  const info=recState.projects.find(x=>x.name===p);
+  if(info && info.secs>80*60 && !confirm('This project is '+mmss(info.secs)+' long, more than fits on one CD (80:00). Burn anyway? (Windows Media Player will split it across CDs.)')) return;
+  try{ const r=await window.api.projBurn(p);
+    toast(r.player ? 'Windows Media Player is opening. Put a blank CD in, click its Burn tab (Audio CD), then Start burn.' : 'The project folder is open. Windows Media Player wasn’t found; see the User Guide, Projects and CDs.', 12000); }
+  catch(e){ toast(errText(e),6000); }
+};
+$('btnRecFolder').onclick=()=>window.api.recFolder(recState.project||null);
+
 async function showRecordings(){
-  const box=$('recList'); const list=await window.api.recList();
+  await refreshProjects();
+  const proj=recState.project||null, box=$('recList');
+  let list=[]; try{ list=await window.api.recList(proj); }catch(e){ noteError('list recordings: '+errText(e)); }
+  const total=list.reduce((s,t)=>s+t.secs,0);
+  $('recInfoLine').textContent=''; $('recInfoLine').style.color='';
+  if(proj){ const over=total>80*60;
+    $('recInfoLine').textContent=list.length+(list.length===1?' track':' tracks')+' · '+mmss(total)+(over?' — too long for one CD (80:00)':' of 80:00 on a CD');
+    if(over) $('recInfoLine').style.color='var(--red)'; }
   box.innerHTML='';
-  if(!list.length){ box.innerHTML='<div class="empty">No recordings yet.<br>Pick the mixer under "Record from", turn on ● REC, and sing a song.</div>'; return; }
-  for(const r of list){
+  if(!list.length){ box.innerHTML = proj
+      ? '<div class="empty">No songs in this project yet.<br>Pick it next to “New recordings go to” and record, or move recordings in with 📁.</div>'
+      : '<div class="empty">No loose recordings.<br>Pick the mixer under "Record from", turn on ● REC, and sing a song.</div>'; return; }
+  list.forEach((r,i)=>{
     const row=document.createElement('div'); row.className='row';
     const playing=recPlaying===r.name;
-    row.innerHTML=`<button title="${playing?'Stop':'Listen'}">${playing?'■':'▶'}</button><div class="name"><div></div><div class="meta"></div></div>
-      <button title="Show in folder">📂</button><button title="Delete (moves it to the Recycle Bin)">🗑</button>`;
-    row.querySelector('.name div').textContent=r.name.replace(/\.(mp3|wav|webm)$/i,'');
-    row.querySelector('.meta').textContent=new Date(r.time).toLocaleString()+' · '+(r.size/1048576).toFixed(1)+' MB';
-    const b=row.querySelectorAll('button');
-    b[0].onclick=async()=>{
+    row.innerHTML=(proj?`<span class="num">${i+1}</span>`:'')+`<button title="${playing?'Stop':'Listen'}">${playing?'■':'▶'}</button><div class="name"><div class="t"></div><div class="meta"></div></div>
+      <button title="Rename">✏️</button>`+(proj?'<button title="Move up">▲</button><button title="Move down">▼</button>':'')+
+      `<button title="Move to a project, or out of one">📁</button><button title="Show in folder">📂</button><button title="Delete (moves it to the Recycle Bin)">🗑</button>`;
+    row.querySelector('.t').textContent=r.title; row.title=r.name;
+    row.querySelector('.meta').textContent=mmss(r.secs)+' · '+new Date(r.time).toLocaleString();
+    const b=[...row.querySelectorAll('button')]; let k=0;
+    const play=b[k++], ren=b[k++], up=proj?b[k++]:null, down=proj?b[k++]:null, mv=b[k++], show=b[k++], del=b[k++];
+    play.onclick=async()=>{
       if(playing){ recAudioStop(); return showRecordings(); }
       if(song && isPlaying()) pause();
       recAudioStop();
-      const bytes=await window.api.recRead(r.name);
+      const bytes=await window.api.recRead(proj, r.name);
       recAudio.src=URL.createObjectURL(new Blob([bytes],{type:'audio/mpeg'})); recPlaying=r.name;
       recAudio.volume=$('vol').value/100; recAudio.play(); showRecordings();
     };
-    b[1].onclick=()=>window.api.recShow(r.name);
-    b[2].onclick=async()=>{ if(!confirm('Move "'+r.name+'" to the Recycle Bin?')) return;
-      if(recPlaying===r.name) recAudioStop(); await window.api.recDelete(r.name); showRecordings(); };
+    ren.onclick=async()=>{ const n=await askName('New name for this recording', r.title); if(!n||n===r.title) return;
+      if(recPlaying===r.name) recAudioStop();
+      try{ await window.api.recRename(proj, r.name, n); }catch(e){ toast(errText(e),5000); } showRecordings(); };
+    const swap=async j=>{ const order=list.map(x=>x.name); [order[i],order[j]]=[order[j],order[i]]; if(recPlaying) recAudioStop();
+      await window.api.recReorder(proj, order); showRecordings(); };
+    if(up) up.onclick=()=>{ if(i>0) swap(i-1); };
+    if(down) down.onclick=()=>{ if(i<list.length-1) swap(i+1); };
+    mv.onclick=async()=>{
+      const items=recState.projects.filter(p=>p.name!==proj).map(p=>({label:'💿 '+p.name+'  ('+p.tracks+')', value:p.name}));
+      if(proj) items.unshift({label:'Take it out of "'+proj+'" (not in a project)', value:'__loose__'});
+      let v=await pickFrom('Move "'+r.title+'" to:', items, '+ New Project'); if(!v) return;
+      if(v==='__new__'){ const n=await askName('Name of the new project (CD)'); if(!n) return; try{ v=await window.api.projCreate(n); }catch(e){ return toast(errText(e),5000); } }
+      if(recPlaying===r.name) recAudioStop();
+      try{ await window.api.recMove(proj, r.name, v==='__loose__'?null:v); }catch(e){ return toast(errText(e),5000); }
+      toast(v==='__loose__' ? 'Moved out of the project.' : 'Moved to "'+v+'".', 3500);
+      showRecordings();
+    };
+    show.onclick=()=>window.api.recShow(proj, r.name);
+    del.onclick=async()=>{ if(!confirm('Move "'+r.title+'" to the Recycle Bin?')) return;
+      if(recPlaying===r.name) recAudioStop(); await window.api.recDelete(proj, r.name); showRecordings(); };
     box.appendChild(row);
-  }
+  });
 }
+refreshProjects();
 
 /* ================= TV SCREEN ================= */
 let tv=null, tvCanvas=null;
@@ -944,4 +1024,4 @@ $('guideToc').addEventListener('click', e=>{ const a=e.target.closest('a'); if(!
   document.getElementById(a.getAttribute('href').slice(1)).scrollIntoView({behavior:'smooth'}); });
 window.api.onOpenGuide && window.api.onOpenGuide(()=>openGuide());
 
-window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec,recMix,applyRecMix,saved:()=>saved};
+window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec,recMix,applyRecMix,saved:()=>saved,recState,showRecordings};
