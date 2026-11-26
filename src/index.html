@@ -28,7 +28,7 @@
 
   <main>
     <section class="panel">
-      <h2><button class="tab active" id="tabLib">Song Library</button><button class="tab" id="tabRec">Recordings</button>
+      <h2><button class="tab active" id="tabLib">Song Library</button><button class="tab" id="tabPl">Playlists</button><button class="tab" id="tabRec">Recordings</button>
         <span class="sp"></span><button id="btnRecFolder" style="display:none">Open Folder</button></h2>
       <div id="libView" class="view">
       <div class="search">
@@ -48,13 +48,18 @@
         </div>
       </div>
       </div>
+      <div id="plView" class="view" style="display:none">
+        <div class="pltools" id="plTools"></div>
+        <div class="list" id="plList"></div>
+      </div>
       <div id="recView" class="view" style="display:none">
         <div class="list" id="recList"></div>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Playlist <span class="sp"></span>
+      <h2><span id="tonightTitle">Playlist</span> <span class="sp"></span>
+        <button id="btnSavePl" title="Save this list as a playlist to use again">💾 Save as Playlist</button>
         <button id="btnClearPlayed" title="Remove songs that have already been sung">Clear Sung</button>
         <button id="btnClearAll">Clear All</button>
       </h2>
@@ -123,7 +128,7 @@
     </div>
     <nav class="toc" id="guideToc">
       <a href="#g-start">Getting started</a><a href="#g-sing">Singing a song</a><a href="#g-key">Changing the key</a>
-      <a href="#g-tv">The TV screen</a><a href="#g-record">Recording</a><a href="#g-recordings">Listening to recordings</a>
+      <a href="#g-playlists">Playlists</a><a href="#g-tv">The TV screen</a><a href="#g-record">Recording</a><a href="#g-recordings">Listening to recordings</a>
       <a href="#g-songs">Song folders and the drive</a><a href="#g-search">Finding songs</a><a href="#g-text">Bigger text</a>
       <a href="#g-problems">If something goes wrong</a><a href="#g-updates">Updates</a><a href="#g-keys">Keyboard shortcuts</a>
     </nav>
@@ -160,6 +165,17 @@
 <p>While a song is playing, press <b>♯ +</b> to raise it or <b>♭ −</b> to lower it, one step at a time (up to 6 each way). The speed stays the same.</p>
 <p>The app remembers the key for that song on the Playlist, shown as <b>Key +2</b> and so on. <b>0</b> is the original key.</p>
 <p>A few video songs can't change key; the buttons are greyed out for those.</p></section>
+
+<section id="g-playlists"><h4>Playlists (saved lists of songs)</h4>
+<p>Click the <b>Playlists</b> tab (next to Song Library). Each playlist is a saved list, like <i>Elvis</i>, <i>E Gospel</i> or <i>Merle Hag</i>.</p>
+<ul>
+<li><b>Open</b> shows its songs. <b>Add all to tonight</b> puts the whole list on the Playlist on the right, ready to sing.</li>
+<li>To make a new one: put songs on the Playlist on the right, then click <b>💾 Save as Playlist</b> and type a name.</li>
+<li>To add one song to a saved playlist: click <b>📋+</b> next to the song in the Song Library and pick the playlist.</li>
+<li>Inside an open playlist: <b>▲ ▼</b> move songs, <b>✕</b> takes a song off that playlist, <b>Rename</b> changes its name.</li>
+<li><b>🗑</b> deletes a playlist (the songs themselves are not deleted).</li>
+<li><b>Import from Show Presenter Pro</b> brings in the lists from the old program, named the same way they were there.</li>
+</ul></section>
 
 <section id="g-tv"><h4>The TV screen</h4>
 <p>If the TV is connected when the app opens, the words show on it automatically, full screen.</p>
@@ -246,6 +262,20 @@
   <p class="mhelp">Leave Timing at 0 unless the voice sounds ahead of or behind the music in recordings.</p>
   <div class="fader"><label>Recording level</label><div class="mmeter big"><div id="mixMeterFill"></div></div></div>
   <div class="mrow" style="justify-content:flex-end"><button id="btnMixReset">Reset to normal</button></div>
+</div>
+<div class="modal" id="nameModal" style="display:none">
+  <div class="box" style="width:min(520px,92vw)">
+    <h3 id="nameTitle">Playlist name</h3>
+    <input type="text" id="nameInput" maxlength="80" autocomplete="off">
+    <div class="mrow" style="justify-content:flex-end"><button id="nameCancel">Cancel</button><button class="primary" id="nameOk">OK</button></div>
+  </div>
+</div>
+<div class="modal" id="chooseModal" style="display:none">
+  <div class="box" style="width:min(560px,92vw)">
+    <h3 id="chooseTitle">Add to which playlist?</h3>
+    <div class="list" id="chooseList"></div>
+    <div class="mrow" style="justify-content:flex-end"><button id="chooseNew">+ New Playlist</button><button id="chooseCancel">Cancel</button></div>
+  </div>
 </div>
 <div class="msg" id="msg"></div>
 <div class="busy" id="busy">Loading…</div>

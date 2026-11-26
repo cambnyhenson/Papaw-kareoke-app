@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('api', {
   libRemove: id => ipcRenderer.invoke('lib-remove', id),
   libScan: id => ipcRenderer.invoke('lib-scan', id),
   onScanProgress: cb => ipcRenderer.on('scan-progress', (_e, name, n) => cb(name, n)),
+  plGet: () => ipcRenderer.invoke('pl-get'),
+  plSave: data => ipcRenderer.invoke('pl-save', data),
+  sppFound: () => ipcRenderer.invoke('spp-found'),
+  sppImport: () => ipcRenderer.invoke('spp-import'),
+  sppNames: () => ipcRenderer.invoke('spp-names'),
   read: key => ipcRenderer.invoke('read', key),     // -> Uint8Array
   hasTV: () => ipcRenderer.invoke('has-tv'),
   version: () => ipcRenderer.invoke('version'),

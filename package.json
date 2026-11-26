@@ -19,6 +19,7 @@
       "main.js",
       "preload.js",
       "library.js",
+      "playlists.js",
       "report.json",
       "reports.js",
       "src/**/*",
@@ -62,6 +63,7 @@
     "playwright-core": "^1.65.1"
   },
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "mdb-reader": "^3.2.2"
   }
 }

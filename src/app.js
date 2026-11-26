@@ -190,16 +190,19 @@ function parseName(base){
   const m=s.match(CODE_RE);
   // only treat the start as a disc code if "Artist - Title" is still left after it (so "Matchbox 20 - Push" stays intact)
   if(m){ const rest=s.slice(m[0].length).trim(); if(rest.includes(' - ')){ code=m[1]; s=rest; } }
-  const parts=s.split(/\s+-\s+/).map(x=>x.trim()).filter(Boolean);
+  const parts=s.split(/\s+-\s+/).map(x=>x.replace(/^-+\s*|\s*-+$/g,'').trim()).filter(Boolean);
   if(parts.length<2) return {code, artist:'', title:s};
   return nameOrder==='ta' ? {code, title:parts[0], artist:parts.slice(1).join(' - ')}
                           : {code, artist:parts[0], title:parts.slice(1).join(' - ')};
 }
 const displayName = s => s.artist ? s.artist+' - '+s.title : s.title;
 
+let pathIndex=new Map();  // lower-case full path on disk -> library key
+let sppNames=null;        // Show Presenter's artist/title per full path, after an import
 function buildLibrary(){
-  library=new Map();
+  library=new Map(); pathIndex=new Map();
   for(const f of folders){
+    const sep=(f.path||'').includes('\\')?'\\':'/', base=(f.path||'').replace(/[\\/]+$/,'');
     const groups=new Map();
     for(const rel of rawFiles[f.id]||[]){
       const e=ext(rel), base=stripExt(rel).toLowerCase(), key=f.id+'|'+rel;
@@ -208,8 +211,11 @@ function buildLibrary(){
     }
     const add=(key,type,parts)=>{
       const rel=key.slice(key.indexOf('|')+1), file=stripExt(rel.split('/').pop());
-      const p=parseName(file), folder=f.name+(rel.includes('/')?' › '+rel.split('/').slice(0,-1).join(' › '):'');
-      library.set(key,{path:key,type,...parts,...p,name:displayName(p),folder,online:f.online,
+      const full=(base+sep+rel.split('/').join(sep)).toLowerCase(); pathIndex.set(full,key);
+      let p=parseName(file); const ov=sppNames&&sppNames[full];
+      if(ov && ov[1]) p={code:ov[2]||p.code, artist:ov[0], title:ov[1]};   // Show Presenter knew this song's artist/title
+      const folder=f.name+(rel.includes('/')?' › '+rel.split('/').slice(0,-1).join(' › '):'');
+      library.set(key,{path:key,full,type,...parts,...p,name:displayName(p),folder,online:f.online,
         search:(p.artist+' '+p.title+' '+p.code+' '+rel).toLowerCase()});
     };
     for(const g of groups.values()){
@@ -219,8 +225,29 @@ function buildLibrary(){
       if(g.video) add(g.video,'video',{video:g.video});
     }
   }
+  fixSwappedNames();
   sortLibrary();
   updateLibStatus(); doSearch(); renderPlaylist();
+}
+/* Some files (and some of Show Presenter's names) have artist and title the wrong way round, e.g.
+   artist "Don't Take Her She's All I Got", title "Paycheck, Johnny". If the "title" is used as an artist
+   by several other songs and the "artist" isn't, swap them back. */
+function fixSwappedNames(){
+  // Artist names repeat across many songs; song titles mostly don't.
+  const asArtist=new Map(), any=new Map(), norm=s=>s.toLowerCase().replace(/\s+/g,' ').replace(/-vocals?$/,'').trim();
+  const inc=(m,k)=>m.set(k,(m.get(k)||0)+1);
+  for(const s of library.values()){ if(s.artist){ inc(asArtist,norm(s.artist)); inc(any,norm(s.artist)); } if(s.title) inc(any,norm(s.title)); }
+  for(const s of library.values()){
+    if(!s.artist||!s.title) continue;
+    const t=norm(s.title), a=norm(s.artist);
+    const at=asArtist.get(t)||0, aa=asArtist.get(a)||0;
+    const titleIsArtist= at>=3 && at>3*aa && (any.get(t)||0) > 2*(any.get(a)||0);
+    const plainSwap= at>=3 && aa<=1;
+    if(titleIsArtist || plainSwap){
+      [s.artist,s.title]=[s.title,s.artist]; s.name=displayName(s);
+      s.search=(s.artist+' '+s.title+' '+s.code+' '+s.path).toLowerCase();
+    }
+  }
 }
 function sortLibrary(){
   const c=collator.compare;
@@ -305,12 +332,13 @@ function doSearch(){
   if(!res.length){ box.innerHTML='<div class="empty">No songs match that search</div>'; return; }
   for(const s of res){
     const r=document.createElement('div'); r.className='row'+(s.online?'':' missing');
-    r.innerHTML=`<div class="name"><div class="t"></div><div class="folder"></div></div>${s.code?'<span class="tag code"></span>':''}<span class="tag">${typeLabel[s.type]}</span><button>Add</button>`;
+    r.innerHTML=`<div class="name"><div class="t"></div><div class="folder"></div></div>${s.code?'<span class="tag code"></span>':''}<span class="tag">${typeLabel[s.type]}</span><button class="pladd" title="Add to a saved playlist">📋+</button><button class="add">Add</button>`;
     r.querySelector('.t').textContent=s.title; r.title=s.name+'\n'+s.folder;
     r.querySelector('.folder').textContent=(s.artist||'')+(s.artist?'  ·  ':'')+s.folder;
     if(s.code) r.querySelector('.code').textContent=s.code;
-    r.querySelector('button').onclick=()=>addToPlaylist(s);
-    r.ondblclick=()=>addToPlaylist(s);
+    r.querySelector('button.add').onclick=()=>addToPlaylist(s);
+    r.querySelector('button.pladd').onclick=()=>chooseSavedPlaylist(s);
+    r.ondblclick=e=>{ if(e.target.tagName!=='BUTTON') addToPlaylist(s); };
     box.appendChild(r);
   }
 }
@@ -321,7 +349,7 @@ let playlist=[]; try{ playlist=JSON.parse(localStorage.getItem('kp.playlist')||'
 let currentId=null;
 const save=()=>{ try{ localStorage.setItem('kp.playlist', JSON.stringify(playlist)); }catch(e){} };
 const uid=()=>Math.random().toString(36).slice(2,10);
-function addToPlaylist(s){ playlist.push({id:uid(), path:s.path, name:s.name, key:0, played:false}); save(); renderPlaylist(); toast('Added: '+s.name,1500); }
+function addToPlaylist(s, key=0, quiet){ playlist.push({id:uid(), path:s.path, name:s.name, key, played:false}); save(); renderPlaylist(); if(!quiet) toast('Added: '+s.name,1500); }
 const keyText = k => k===0 ? 'Original key' : (k>0?'+':'')+k;
 function renderPlaylist(){
   const box=$('playlist'); box.innerHTML='';
@@ -345,6 +373,127 @@ function renderPlaylist(){
 }
 $('btnClearPlayed').onclick=()=>{ playlist=playlist.filter(i=>!i.played||i.id===currentId); save(); renderPlaylist(); };
 $('btnClearAll').onclick=()=>{ if(confirm('Remove every song from the playlist?')){ stopSong(); playlist=[]; save(); renderPlaylist(); } };
+
+/* ================= SAVED PLAYLISTS =================
+   Saved lists ("Elvis", "E Gospel"...) kept in the app's data folder. Each song is stored by its full
+   path on disk plus artist/title, so it survives rescans and drive-letter changes. */
+let saved={lists:[]}, openListId=null, sppAvailable=false;
+const savePl=()=>window.api.plSave(saved).catch(e=>noteError('could not save playlists: '+e.message));
+const songOf = it => { const k = it.lib || (it.full && pathIndex.get(it.full.toLowerCase())); return k ? library.get(k) : null; };
+const itemFromSong = (s, key=0) => ({ lib:s.path, full:s.full, artist:s.artist, title:s.title, disc:s.code, key });
+const itemName = it => { const s=songOf(it); return s ? s.name : (it.artist ? it.artist+' - '+it.title : it.title || it.full); };
+
+function askName(title, value=''){
+  return new Promise(res=>{
+    $('nameTitle').textContent=title; $('nameInput').value=value; $('nameModal').style.display='flex'; $('nameInput').focus(); $('nameInput').select();
+    const done=v=>{ $('nameModal').style.display='none'; $('nameOk').onclick=$('nameCancel').onclick=$('nameInput').onkeydown=null; res(v); };
+    $('nameOk').onclick=()=>done($('nameInput').value.trim()||null);
+    $('nameCancel').onclick=()=>done(null);
+    $('nameInput').onkeydown=e=>{ if(e.key==='Enter') done($('nameInput').value.trim()||null); if(e.key==='Escape') done(null); };
+  });
+}
+function uniqueName(name){ let n=name, i=2; while(saved.lists.some(l=>l.name.toLowerCase()===n.toLowerCase())) n=name+' ('+(i++)+')'; return n; }
+
+function renderPlaylists(){
+  const tools=$('plTools'), box=$('plList'); tools.innerHTML=''; box.innerHTML='';
+  const L=saved.lists.find(l=>l.id===openListId);
+  if(!L){
+    openListId=null;
+    tools.innerHTML=`<button class="primary" id="plNew">+ New Playlist</button>${sppAvailable?'<button id="plImport">Import from Show Presenter Pro</button>':''}`;
+    $('plNew').onclick=async()=>{ const n=await askName('New playlist name'); if(!n) return;
+      const l={id:uid(), name:uniqueName(n), items:[]}; saved.lists.push(l); await savePl(); openListId=l.id; renderPlaylists();
+      toast('Playlist made. Add songs with 📋+ in the Song Library.',5000); };
+    if(sppAvailable) $('plImport').onclick=importSpp;
+    if(!saved.lists.length){ box.innerHTML='<div class="empty">No saved playlists yet.<br>Put songs on the Playlist on the right and click 💾 Save as Playlist'+(sppAvailable?', or import them from Show Presenter Pro.':'.')+'</div>'; return; }
+    for(const l of [...saved.lists].sort((a,b)=>collator.compare(a.name,b.name))){
+      const r=document.createElement('div'); r.className='row';
+      r.innerHTML=`<div class="name"><div class="t"></div><div class="meta"></div></div><button>Open</button><button>Add all to tonight</button><button title="Delete this playlist">🗑</button>`;
+      r.querySelector('.t').textContent=l.name; r.querySelector('.meta').textContent=l.items.length+(l.items.length===1?' song':' songs');
+      const b=r.querySelectorAll('button');
+      b[0].onclick=()=>{ openListId=l.id; renderPlaylists(); };
+      b[1].onclick=()=>addListToTonight(l);
+      b[2].onclick=async()=>{ if(!confirm('Delete the playlist "'+l.name+'"? (The songs themselves are not deleted.)')) return;
+        saved.lists=saved.lists.filter(x=>x!==l); await savePl(); renderPlaylists(); };
+      r.ondblclick=e=>{ if(e.target.tagName!=='BUTTON'){ openListId=l.id; renderPlaylists(); } };
+      box.appendChild(r);
+    }
+    return;
+  }
+  tools.innerHTML=`<button id="plBack">‹ All Playlists</button><h3></h3><span class="sp"></span><button id="plRename">Rename</button><button class="primary" id="plAll">Add all to tonight</button>`;
+  tools.querySelector('h3').textContent=L.name+' ('+L.items.length+')';
+  $('plBack').onclick=()=>{ openListId=null; renderPlaylists(); };
+  $('plRename').onclick=async()=>{ const n=await askName('Rename playlist', L.name); if(!n||n===L.name) return; L.name=uniqueName(n); await savePl(); renderPlaylists(); };
+  $('plAll').onclick=()=>addListToTonight(L);
+  if(!L.items.length){ box.innerHTML='<div class="empty">This playlist is empty.<br>Add songs with 📋+ in the Song Library, or put songs on the Playlist on the right and click 💾 Save as Playlist.</div>'; return; }
+  L.items.forEach((it,i)=>{
+    const s=songOf(it), r=document.createElement('div'); r.className='row'+(s&&s.online?'':' missing');
+    r.innerHTML=`<span class="num">${i+1}</span><div class="name"><div></div></div>${it.key?`<span class="keytag">Key ${(it.key>0?'+':'')+it.key}</span>`:''}<button title="Add to tonight's Playlist">Add</button><button title="Move up">▲</button><button title="Move down">▼</button><button title="Take off this playlist">✕</button>`;
+    r.querySelector('.name div').textContent=itemName(it)+(s?(s.online?'':'  (drive not plugged in)'):'  (file not found)');
+    const b=r.querySelectorAll('button');
+    b[0].onclick=()=>{ if(!s) return toast('That song file was not found in the library.'); addToPlaylist(s, it.key); };
+    b[1].onclick=async()=>{ if(i>0){ [L.items[i-1],L.items[i]]=[L.items[i],L.items[i-1]]; await savePl(); renderPlaylists(); } };
+    b[2].onclick=async()=>{ if(i<L.items.length-1){ [L.items[i+1],L.items[i]]=[L.items[i],L.items[i+1]]; await savePl(); renderPlaylists(); } };
+    b[3].onclick=async()=>{ L.items.splice(i,1); await savePl(); renderPlaylists(); };
+    box.appendChild(r);
+  });
+}
+function addListToTonight(L){
+  let n=0, miss=0;
+  for(const it of L.items){ const s=songOf(it); if(s){ addToPlaylist(s, it.key, true); n++; } else miss++; }
+  toast(n+' songs from "'+L.name+'" added to tonight'+(miss?' ('+miss+' not found on the drive)':''), 5000);
+}
+$('btnSavePl').onclick=async()=>{
+  if(!playlist.length) return toast('Put some songs on the Playlist first.');
+  const n=await askName('Save this list as a playlist named:'); if(!n) return;
+  const existing=saved.lists.find(l=>l.name.toLowerCase()===n.toLowerCase());
+  const items=playlist.map(it=>{ const s=library.get(it.path); return s ? itemFromSong(s,it.key) : null; }).filter(Boolean);
+  if(existing){ if(!confirm('Replace the songs in "'+existing.name+'" with this list?')) return; existing.items=items; }
+  else saved.lists.push({id:uid(), name:n, items});
+  await savePl(); toast('Saved playlist "'+n+'" ('+items.length+' songs)', 4000);
+  if($('plView').style.display!=='none') renderPlaylists();
+};
+let chooseFor=null;
+function chooseSavedPlaylist(s){
+  chooseFor=s; $('chooseTitle').textContent='Add "'+s.name+'" to which playlist?';
+  const box=$('chooseList'); box.innerHTML='';
+  if(!saved.lists.length) box.innerHTML='<div class="empty">No playlists yet. Click + New Playlist.</div>';
+  for(const l of [...saved.lists].sort((a,b)=>collator.compare(a.name,b.name))){
+    const r=document.createElement('div'); r.className='row';
+    r.innerHTML='<div class="name"><div class="t"></div></div><button>Add here</button>';
+    r.querySelector('.t').textContent=l.name+'  ('+l.items.length+')';
+    r.onclick=()=>addToSaved(l);
+    box.appendChild(r);
+  }
+  $('chooseModal').style.display='flex';
+}
+async function addToSaved(l){
+  $('chooseModal').style.display='none'; const s=chooseFor; if(!s) return;
+  if(l.items.some(it=>songOf(it)===s)) return toast('"'+s.name+'" is already on '+l.name+'.');
+  l.items.push(itemFromSong(s)); await savePl(); toast('Added to '+l.name+': '+s.name, 3000);
+  if($('plView').style.display!=='none') renderPlaylists();
+}
+$('chooseCancel').onclick=()=>{ $('chooseModal').style.display='none'; };
+$('chooseNew').onclick=async()=>{ $('chooseModal').style.display='none'; const n=await askName('New playlist name'); if(!n) return;
+  const l={id:uid(), name:uniqueName(n), items:[]}; saved.lists.push(l); await addToSaved(l); };
+
+async function importSpp(){
+  if(!confirm('Bring in the lists from Show Presenter Pro? Each name used there (like "Elvis" or "E Gospel") becomes a playlist here. Nothing in Show Presenter is changed.')) return;
+  busy(true,'Reading Show Presenter Pro…');
+  try{
+    const r=await window.api.sppImport();
+    let added=0, merged=0;
+    for(const p of r.playlists){
+      const items=p.items.map(i=>({full:i.full, artist:i.artist, title:i.title, disc:i.disc, key:i.key}));
+      const ex=saved.lists.find(l=>l.name.toLowerCase()===p.name.toLowerCase());
+      if(ex){ const have=new Set(ex.items.map(i=>(i.full||'').toLowerCase())); for(const it of items) if(!have.has(it.full.toLowerCase())) ex.items.push(it); merged++; }
+      else { saved.lists.push({id:uid(), name:p.name, items}); added++; }
+    }
+    await savePl();
+    sppNames=await window.api.sppNames(); buildLibrary();
+    busy(false); renderPlaylists();
+    toast('Imported '+added+' playlists'+(merged?' (and added to '+merged+' existing)':'')+' and Show Presenter’s song names.', 7000);
+  }catch(e){ busy(false); noteError('Show Presenter import: '+(e.stack||e)); toast('Could not read Show Presenter Pro’s data: '+e.message, 8000); }
+}
 
 /* ================= PLAYBACK ================= */
 const video=$('video'), pCanvas=$('previewCanvas');
@@ -450,7 +599,7 @@ function changeKey(d){ const it=current(); if(!it||usesElement()) return; it.key
 $('keyUp').onclick=()=>changeKey(1); $('keyDown').onclick=()=>changeKey(-1);
 
 const typing = t => t && (t.tagName==='TEXTAREA' || t.tagName==='SELECT' || t.isContentEditable || (t.tagName==='INPUT' && t.type==='text'));
-const MODALS=['foldersModal','reportModal','guideModal'];
+const MODALS=['foldersModal','reportModal','guideModal','chooseModal'];
 const modalOpen = () => MODALS.some(id=>$(id).style.display!=='none');
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){ for(const id of [...MODALS,'mixPanel']) $(id).style.display='none'; return; }
@@ -618,13 +767,13 @@ applyRecMix();
 
 /* Recordings tab */
 function showTab(which){
-  const recs=which==='rec';
-  $('libView').style.display=recs?'none':''; $('recView').style.display=recs?'':'none';
-  $('tabLib').classList.toggle('active',!recs); $('tabRec').classList.toggle('active',recs);
-  $('btnRecFolder').style.display=recs?'':'none';
-  if(recs) showRecordings();
+  for(const [t,v] of [['lib','libView'],['pl','plView'],['rec','recView']]) $(v).style.display = which===t ? '' : 'none';
+  $('tabLib').classList.toggle('active',which==='lib'); $('tabPl').classList.toggle('active',which==='pl'); $('tabRec').classList.toggle('active',which==='rec');
+  $('btnRecFolder').style.display=which==='rec'?'':'none';
+  if(which==='rec') showRecordings();
+  if(which==='pl') renderPlaylists();
 }
-$('tabLib').onclick=()=>showTab('lib'); $('tabRec').onclick=()=>showTab('rec');
+$('tabLib').onclick=()=>showTab('lib'); $('tabPl').onclick=()=>showTab('pl'); $('tabRec').onclick=()=>showTab('rec');
 $('btnRecFolder').onclick=()=>window.api.recFolder();
 function recAudioStop(){ recAudio.pause(); if(recAudio.src){ URL.revokeObjectURL(recAudio.src); recAudio.removeAttribute('src'); } recPlaying=null; }
 recAudio.onended=()=>{ recAudioStop(); showRecordings(); };
@@ -733,6 +882,9 @@ window.addEventListener('beforeunload', ()=>{ if(tv && !tv.closed) tv.close(); }
 
 renderPlaylist(); updateKeyUI(); listOutputs(); listInputs(); updateRecUI();
 (async()=>{
+  try{ saved=await window.api.plGet(); if(!saved||!Array.isArray(saved.lists)) saved={lists:[]}; }catch(e){ saved={lists:[]}; }
+  try{ sppNames=await window.api.sppNames(); }catch(e){}
+  try{ sppAvailable=await window.api.sppFound(); }catch(e){}
   await loadIndex();
   if(!folders.length){ $('btnFolder').click(); } else rescan(null,true);   // opens instantly, then checks for new songs
   if(await window.api.hasTV()) openTV();   // TV plugged in: put lyrics screen on it right away
@@ -790,4 +942,4 @@ $('guideToc').addEventListener('click', e=>{ const a=e.target.closest('a'); if(!
   document.getElementById(a.getAttribute('href').slice(1)).scrollIntoView({behavior:'smooth'}); });
 window.api.onOpenGuide && window.api.onOpenGuide(()=>openGuide());
 
-window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec,recMix,applyRecMix};
+window.__kp={engine,cdg,library:()=>library,playItem,playlist:()=>playlist,loadIndex,rescan,parseName,song:()=>song,tv:()=>tv,rec,recMix,applyRecMix,saved:()=>saved};

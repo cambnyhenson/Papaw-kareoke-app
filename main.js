@@ -112,6 +112,12 @@ ipcMain.handle('lib-scan', (e, id) => {
   }
   return scanning;
 });
+const playlists = require('./playlists');
+ipcMain.handle('pl-get', () => playlists.get());
+ipcMain.handle('pl-save', (_e, data) => playlists.save(data));
+ipcMain.handle('spp-found', () => playlists.sppFound());
+ipcMain.handle('spp-import', async () => { const r = await playlists.importSpp(); log('info', 'imported Show Presenter:', r.playlists.length, 'playlists,', r.names, 'song names'); return r; });
+ipcMain.handle('spp-names', () => playlists.names());
 ipcMain.handle('read', async (_e, key) => {
   const full = await library.fullPath(key);
   const st = await fs.stat(full);

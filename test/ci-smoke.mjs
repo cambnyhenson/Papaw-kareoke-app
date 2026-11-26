@@ -21,6 +21,7 @@ const check = (ok, what) => { console.log((ok ? 'PASS ' : 'FAIL ') + what); if (
 
 const app = await electron.launch({ executablePath: exe, args, timeout: 60000 });
 const pg = await app.firstWindow();
+pg.on('dialog', d => d.accept());
 const pageErrors = [];
 pg.on('pageerror', e => pageErrors.push(e.message));
 await pg.waitForLoadState('domcontentloaded');
@@ -32,7 +33,7 @@ await pg.evaluate(id => __kp.rescan(id, true), id);
 const status = await pg.textContent('#status');
 check(/^3 songs/.test(status), `library found the 3 test songs (${status})`);
 
-for (const b of await pg.$$('#results .row button')) await b.click();
+for (const b of await pg.$$('#results .row button.add')) await b.click();
 const fits = await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#playlist').getBoundingClientRect().right <= innerWidth);
 check(fits, 'window fits the screen (no sideways scrolling, playlist visible)');
 const names = await pg.$$eval('#playlist .row .name div', e => e.map(x => x.textContent));
@@ -52,6 +53,18 @@ for (let i = 0; i < names.length; i++) {
   await pg.click('#keyDown');
 }
 await pg.click('#btnStop');
+
+// saved playlists: save tonight's list, add a song with 📋+ to a new list, open, load back
+await pg.click('#btnSavePl'); await pg.fill('#nameInput', 'Smoke Test List'); await pg.click('#nameOk'); await pg.waitForTimeout(400);
+await pg.click('#results .row >> nth=0 >> button.pladd'); await pg.click('#chooseNew'); await pg.fill('#nameInput', 'Second List'); await pg.click('#nameOk'); await pg.waitForTimeout(400);
+await pg.click('#results .row >> nth=0 >> button.pladd'); await pg.click('#chooseList .row:has-text("Smoke Test List")'); await pg.waitForTimeout(300); // already on it: refused
+const counts = await pg.evaluate(() => Object.fromEntries(__kp.saved().lists.map(l => [l.name, l.items.length])));
+check(counts['Smoke Test List'] === 3 && counts['Second List'] === 1, 'Save as Playlist and 📋+ work, no duplicates (' + JSON.stringify(counts) + ')');
+await pg.click('#tabPl'); await pg.click('#plList .row:has-text("Smoke Test List") >> button:has-text("Open")'); await pg.waitForTimeout(300);
+check(await pg.$$eval('#plList .row', e => e.length) === 3, 'opening a saved playlist shows its songs');
+await pg.click('#btnClearAll'); await pg.click('#plAll'); await pg.waitForTimeout(300);
+check(await pg.evaluate(() => __kp.playlist().length) === 3, 'Add all to tonight loads the saved playlist');
+await pg.click('#tabLib');
 
 await pg.click('#btnMix');
 check(await pg.isVisible('#mixPanel'), 'Rec Mix panel opens');

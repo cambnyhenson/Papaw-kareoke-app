@@ -126,3 +126,9 @@ select{min-width:0;text-overflow:ellipsis}
 .mmeter{height:10px;border:1px solid #000;border-radius:3px;overflow:hidden;margin:0 0 6px 140px}
 .mmeter.big{margin:0;height:14px;grid-column:span 2}
 .mmeter div{height:100%;width:0;background:var(--green)}
+.pltools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.pltools .sp{flex:1}
+.pltools h3{margin:0;font-size:19px}
+.pltools .note{font-size:15px;flex-basis:100%}
+.modal input[type=text]{font-size:18px}
+#chooseList .row{cursor:pointer}
