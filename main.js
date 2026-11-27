@@ -218,6 +218,11 @@ function buildMenu() {
       { role: 'zoomIn', label: 'Bigger Text', accelerator: 'CmdOrCtrl+=' },
       { role: 'zoomOut', label: 'Smaller Text' },
       { role: 'resetZoom', label: 'Normal Text Size' },
+      // the + − 0 keys on the number pad do the same (the guide says "Ctrl and +")
+      { role: 'zoomIn', accelerator: 'CmdOrCtrl+numadd', visible: false },
+      { role: 'zoomIn', accelerator: 'CmdOrCtrl+Plus', visible: false },
+      { role: 'zoomOut', accelerator: 'CmdOrCtrl+numsub', visible: false },
+      { role: 'resetZoom', accelerator: 'CmdOrCtrl+num0', visible: false },
       { type: 'separator' }, { role: 'togglefullscreen' },
     ] },
     { label: 'Help', submenu: [

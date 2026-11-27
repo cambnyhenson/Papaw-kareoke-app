@@ -356,7 +356,7 @@ function addToPlaylist(s, key=0){ playlist.push(tonightItem(s,key)); save(); ren
 const keyText = k => k===0 ? 'Original key' : (k>0?'+':'')+k;
 function renderPlaylist(){
   const box=$('playlist'); box.innerHTML='';
-  if(!playlist.length){ box.innerHTML='<div class="empty">Playlist is empty.<br>Search for a song on the left and click Add.</div>'; return; }
+  if(!playlist.length){ box.innerHTML='<div class="empty">Tonight’s Playlist is empty.<br>Search for a song on the left and click Add, or load a saved list from the Playlists tab.</div>'; return; }
   let renamed=false; const frag=document.createDocumentFragment();
   playlist.forEach((it,i)=>{
     const s = songOf(it), miss = libList.length && (!s || !s.online);
@@ -378,7 +378,7 @@ function renderPlaylist(){
   if(renamed) save();
 }
 $('btnClearPlayed').onclick=()=>{ playlist=playlist.filter(i=>!i.played||i.id===currentId); save(); renderPlaylist(); };
-$('btnClearAll').onclick=()=>{ if(confirm('Remove every song from the playlist?')){ stopSong(); playlist=[]; save(); renderPlaylist(); } };
+$('btnClearAll').onclick=()=>{ if(confirm('Remove every song from Tonight’s Playlist?')){ stopSong(); playlist=[]; save(); renderPlaylist(); } };
 
 /* ================= SAVED PLAYLISTS =================
    Saved lists ("Elvis", "E Gospel"...) kept in the app's data folder. Each song is stored by its full
@@ -412,7 +412,7 @@ function renderPlaylists(){
       const l={id:uid(), name:uniqueName(n), items:[]}; saved.lists.push(l); await savePl(); openListId=l.id; renderPlaylists();
       toast('Playlist made. Add songs with 📋+ in the Song Library.',5000); };
     if(sppAvailable) $('plImport').onclick=importSpp;
-    if(!saved.lists.length){ box.innerHTML='<div class="empty">No saved playlists yet.<br>Put songs on the Playlist on the right and click 💾 Save as Playlist'+(sppAvailable?', or import them from Show Presenter Pro.':'.')+'</div>'; return; }
+    if(!saved.lists.length){ box.innerHTML='<div class="empty">No saved playlists yet.<br>Put songs on Tonight’s Playlist (on the right) and click 💾 Save as Playlist'+(sppAvailable?', or import them from Show Presenter Pro.':'.')+'</div>'; return; }
     for(const l of [...saved.lists].sort((a,b)=>collator.compare(a.name,b.name))){
       const r=document.createElement('div'); r.className='row';
       r.innerHTML=`<div class="name"><div class="t"></div><div class="meta"></div></div><button>Open</button><button>Add all to tonight</button><button title="Delete this playlist">🗑</button>`;
@@ -432,7 +432,7 @@ function renderPlaylists(){
   $('plBack').onclick=()=>{ openListId=null; renderPlaylists(); };
   $('plRename').onclick=async()=>{ const n=await askName('Rename playlist', L.name); if(!n||n===L.name) return; L.name=uniqueName(n); await savePl(); renderPlaylists(); };
   $('plAll').onclick=()=>addListToTonight(L);
-  if(!L.items.length){ box.innerHTML='<div class="empty">This playlist is empty.<br>Add songs with 📋+ in the Song Library, or put songs on the Playlist on the right and click 💾 Save as Playlist.</div>'; return; }
+  if(!L.items.length){ box.innerHTML='<div class="empty">This playlist is empty.<br>Add songs with 📋+ in the Song Library, or put songs on Tonight’s Playlist and click 💾 Save as Playlist.</div>'; return; }
   L.items.forEach((it,i)=>{
     const s=songOf(it), r=document.createElement('div'); r.className='row'+(s&&s.online?'':' missing');
     r.innerHTML=`<span class="num">${i+1}</span><div class="name"><div></div></div>${it.key?`<span class="keytag">Key ${(it.key>0?'+':'')+it.key}</span>`:''}<button title="Add to tonight's Playlist">Add</button><button title="Move up">▲</button><button title="Move down">▼</button><button title="Take off this playlist">✕</button>`;
@@ -452,7 +452,7 @@ function addListToTonight(L){
   toast(n+' songs from "'+L.name+'" added to tonight'+(miss?' ('+miss+' not found on the drive)':''), 5000);
 }
 $('btnSavePl').onclick=async()=>{
-  if(!playlist.length) return toast('Put some songs on the Playlist first.');
+  if(!playlist.length) return toast('Put some songs on Tonight’s Playlist first.');
   const n=await askName('Save this list as a playlist named:'); if(!n) return;
   const existing=saved.lists.find(l=>l.name.toLowerCase()===n.toLowerCase());
   const items=playlist.map(it=>{ const s=songOf(it); return s ? itemFromSong(s,it.key) : null; }).filter(Boolean);
@@ -593,7 +593,7 @@ video.onended=()=>{ if(usesElement()) songEnded(); };
 
 $('btnPlay').onclick=()=>{ isPlaying()?pause():play(); };
 $('btnStop').onclick=()=>stopSong();
-$('btnNext').onclick=()=>{ const n=nextItem(); if(n) playItem(n); else toast('No more songs on the playlist'); };
+$('btnNext').onclick=()=>{ const n=nextItem(); if(n) playItem(n); else toast('No more songs on Tonight’s Playlist'); };
 $('bar').onclick=e=>{ if(!song) return; const r=e.currentTarget.getBoundingClientRect(); seek((e.clientX-r.left)/r.width*dur()); };
 $('vol').oninput=e=>{ const v=e.target.value/100; engine.setVolume(v); video.volume=v; recAudio.volume=v; localStorage.setItem('kp.vol',e.target.value); };
 $('vol').value=localStorage.getItem('kp.vol')||100; engine.setVolume($('vol').value/100); video.volume=$('vol').value/100;
@@ -934,14 +934,14 @@ async function showRecordings(){
     if(over) $('recInfoLine').style.color='var(--red)'; }
   box.innerHTML='';
   if(!list.length){ box.innerHTML = proj
-      ? '<div class="empty">No songs in this project yet.<br>Pick it next to “New recordings go to” and record, or move recordings in with 📁.</div>'
+      ? '<div class="empty">No songs in this project yet.<br>Pick it next to “New recordings go to” and record, or move recordings in with 💿.</div>'
       : '<div class="empty">No loose recordings.<br>Pick the mixer under "Record from", turn on ● REC, and sing a song.</div>'; return; }
   list.forEach((r,i)=>{
     const row=document.createElement('div'); row.className='row';
     const playing=recPlaying===r.name;
     row.innerHTML=(proj?`<span class="num">${i+1}</span>`:'')+`<button title="${playing?'Stop':'Listen'}">${playing?'■':'▶'}</button><div class="name"><div class="t"></div><div class="meta"></div></div>
       <button title="Rename">✏️</button>`+(proj?'<button title="Move up">▲</button><button title="Move down">▼</button>':'')+
-      `<button title="Move to a project, or out of one">📁</button><button title="Show in folder">📂</button><button title="Delete (moves it to the Recycle Bin)">🗑</button>`;
+      `<button title="Move into a CD project, or back out">💿</button><button title="Show in folder">📂</button><button title="Delete (moves it to the Recycle Bin)">🗑</button>`;
     row.querySelector('.t').textContent=r.title; row.title=r.name;
     row.querySelector('.meta').textContent=mmss(r.secs)+' · '+new Date(r.time).toLocaleString();
     const b=[...row.querySelectorAll('button')]; let k=0;

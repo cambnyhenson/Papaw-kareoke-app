@@ -100,7 +100,7 @@ check(!(await pg.isVisible('#reportModal')), 'Escape closes the report box');
 await pg.click('#btnGuide');
 check(await pg.isVisible('#guideModal'), 'User Guide opens from the bottom bar');
 await pg.click('#guideToc a[href="#g-record"]'); await pg.waitForTimeout(600);
-check(pg.url().endsWith('index.html') && await pg.isVisible('#g-record'), 'guide contents links jump inside the guide');
+check(pg.url().endsWith("index.html") && await pg.isVisible("#g-record"), "guide contents links jump inside the guide");
 await pg.keyboard.press('Escape');
 check(!(await pg.isVisible('#guideModal')), 'Escape closes the guide');
 await pg.keyboard.press('F1');

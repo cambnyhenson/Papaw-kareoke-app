@@ -38,13 +38,9 @@
       </div>
       <div class="list" id="results">
         <div class="help">
-          <b>Getting started</b><br>
-          1. Click <b>📁 Song Folders</b> → <b>+ Add Folder</b> and pick the karaoke drive. The first read of a big drive takes a few minutes; after that the app opens instantly and picks up new songs by itself.<br>
-          2. Under <b>Sound to</b>, pick the mixer.<br>
-          3. With the TV plugged in, click <b>📺 TV Screen</b>. It opens full screen on the TV. Double-click it to switch full screen on or off.<br>
-          4. Search for a song and click <b>Add</b>, then click <b>▶</b> on the playlist to sing it.<br><br>
-          Plays MP3+G zip files, matching .mp3 + .cdg files, and MP4 karaoke videos.<br><br>
-          <b>Recording:</b> pick the mixer under <b>Record from</b> and turn on <b>● REC</b>. Every song played while it's on is saved as an MP3 in Documents › Karaoke Recordings.
+          <b>No songs yet.</b><br>
+          Click <b>📁 Song Folders</b> at the top, then <b>+ Add Folder</b>, and pick the karaoke song drive.<br><br>
+          New to the app? Click <b>📖 User Guide</b> at the bottom right (or press <b>F1</b>).
         </div>
       </div>
       </div>
@@ -71,7 +67,7 @@
     </section>
 
     <section class="panel">
-      <h2><span id="tonightTitle">Playlist</span> <span class="sp"></span>
+      <h2><span id="tonightTitle">Tonight’s Playlist</span> <span class="sp"></span>
         <button id="btnSavePl" title="Save this list as a playlist to use again">💾 Save as Playlist</button>
         <button id="btnClearPlayed" title="Remove songs that have already been sung">Clear Sung</button>
         <button id="btnClearAll">Clear All</button>
@@ -92,7 +88,7 @@
       <div class="btns">
         <button class="big" id="btnPlay" disabled>▶</button>
         <button class="big" id="btnStop" disabled>■</button>
-        <button class="big" id="btnNext" title="Play the next song on the playlist">⏭</button>
+        <button class="big" id="btnNext" title="Play the next song on Tonight’s Playlist">⏭</button>
         <button class="big rec" id="btnRec" title="When on, every song you play is recorded">● REC</button>
         <button class="big" id="btnMix" title="Mic and music levels for the recording">🎚 Rec Mix</button>
         <div class="key">
@@ -140,100 +136,23 @@
       <button class="primary" id="btnGuideClose">Close</button>
     </div>
     <nav class="toc" id="guideToc">
-      <a href="#g-start">Getting started</a><a href="#g-sing">Singing a song</a><a href="#g-key">Changing the key</a>
-      <a href="#g-playlists">Playlists</a><a href="#g-tv">The TV screen</a><a href="#g-record">Recording</a><a href="#g-recordings">Listening to recordings</a>
-      <a href="#g-songs">Song folders and the drive</a><a href="#g-search">Finding songs</a><a href="#g-projects">Projects and CDs</a><a href="#g-text">Bigger text</a>
-      <a href="#g-problems">If something goes wrong</a><a href="#g-updates">Updates</a><a href="#g-keys">Keyboard shortcuts</a>
+      <a href="#g-start">Getting started</a><a href="#g-songs">Song folders and the drive</a><a href="#g-search">Finding songs</a>
+      <a href="#g-sing">Singing a song</a><a href="#g-key">Changing the key</a><a href="#g-playlists">Saved playlists</a>
+      <a href="#g-tv">The TV screen</a><a href="#g-record">Recording</a><a href="#g-recordings">Listening to recordings</a>
+      <a href="#g-projects">Projects and CDs</a><a href="#g-problems">If something goes wrong</a><a href="#g-updates">Updates</a>
+      <a href="#g-keys">Bigger text and shortcuts</a>
     </nav>
     <div class="guide" id="guideBody">
 
 <section id="g-start"><h4>Getting started (one time)</h4>
 <ol>
-<li><b>Plug in</b> the mixer's USB cable and the song drive, and connect the TV, <b>before</b> opening The Butcher Karaoke.</li>
+<li>Plug in the mixer's USB cable, the song drive, and the TV <b>before</b> opening The Butcher Karaoke.</li>
 <li>Open <b>The Butcher Karaoke</b> from the desktop.</li>
 <li>The first time, the <b>Song Folders</b> box opens. Click <b>+ Add Folder</b>, pick the song drive (or the karaoke folder on it), and wait while it reads the songs. On a big drive this takes a few minutes, <b>only the first time</b>. Then click <b>Done</b>.</li>
 <li>At the top, next to <b>Sound to:</b>, pick the <b>mixer</b>. That sends the music to the mixer.</li>
 <li>Next to <b>Record from:</b>, pick the <b>mixer</b> too. The little bar next to it moves when someone talks into the mic.</li>
 </ol>
 <p>The app remembers all of this. Next time, just open it.</p></section>
-
-<section id="g-sing"><h4>Singing a song</h4>
-<ol>
-<li>Type part of the song or the singer's name in the <b>search box</b> on the left, for example <i>patsy crazy</i>.</li>
-<li>Click <b>Add</b> next to the song. It goes onto the <b>Playlist</b> on the right.</li>
-<li>Click <b>▶</b> next to the song on the Playlist to start it. The words show on the TV.</li>
-</ol>
-<p>The buttons at the bottom:</p>
-<ul>
-<li><b>▶ / ❚❚</b> play or pause. The <b>space bar</b> does the same.</li>
-<li><b>■</b> stops the song.</li>
-<li><b>⏭</b> plays the next song on the Playlist.</li>
-<li>Click anywhere on the <b>long bar</b> to jump to that part of the song.</li>
-<li>The <b>🔊 slider</b> is the volume.</li>
-<li><b>Auto-play next song</b>: when checked, the next song starts by itself when one finishes.</li>
-</ul>
-<p>On the Playlist, <b>▲ ▼</b> move a song up or down, and <b>✕</b> takes it off. Songs that have been sung get a ✓ and a line through them. <b>Clear Sung</b> removes those; <b>Clear All</b> empties the list. The Playlist is saved, even if the computer is turned off.</p></section>
-
-<section id="g-key"><h4>Changing the key</h4>
-<p>While a song is playing, press <b>♯ +</b> to raise it or <b>♭ −</b> to lower it, one step at a time (up to 6 each way). The speed stays the same.</p>
-<p>The app remembers the key for that song on the Playlist, shown as <b>Key +2</b> and so on. <b>0</b> is the original key.</p>
-<p>A few video songs can't change key; the buttons are greyed out for those.</p></section>
-
-<section id="g-playlists"><h4>Playlists (saved lists of songs)</h4>
-<p>Click the <b>Playlists</b> tab (next to Song Library). Each playlist is a saved list, like <i>Elvis</i>, <i>E Gospel</i> or <i>Merle Hag</i>.</p>
-<ul>
-<li><b>Open</b> shows its songs. <b>Add all to tonight</b> puts the whole list on the Playlist on the right, ready to sing.</li>
-<li>To make a new one: put songs on the Playlist on the right, then click <b>💾 Save as Playlist</b> and type a name.</li>
-<li>To add one song to a saved playlist: click <b>📋+</b> next to the song in the Song Library and pick the playlist.</li>
-<li>Inside an open playlist: <b>▲ ▼</b> move songs, <b>✕</b> takes a song off that playlist, <b>Rename</b> changes its name.</li>
-<li><b>🗑</b> deletes a playlist (the songs themselves are not deleted).</li>
-<li><b>Import from Show Presenter Pro</b> brings in the lists from the old program, named the same way they were there.</li>
-</ul></section>
-
-<section id="g-tv"><h4>The TV screen</h4>
-<p>If the TV is connected when the app opens, the words show on it automatically, full screen.</p>
-<ul>
-<li>If the TV screen isn't showing, click <b>📺 TV Screen</b> at the top.</li>
-<li><b>Double-click</b> the TV picture to switch full screen on or off.</li>
-<li>Between songs, the TV shows who's <b>Up next</b>.</li>
-<li>If the TV cable comes out, the TV screen closes so it doesn't cover the controls. Plug it back in and it comes back by itself.</li>
-</ul></section>
-
-<section id="g-record"><h4>Recording</h4>
-<ol>
-<li>Make sure <b>Record from:</b> is set to the mixer and the little bar moves when someone talks into the mic.</li>
-<li>Click <b>● REC</b> so it turns red and says <b>REC ON</b>.</li>
-<li>Play a song. It records from start to finish. You'll see <b>● REC</b> and a timer next to the song name.</li>
-</ol>
-<p>When the song ends, is stopped, or the next one starts, the recording is saved by itself. Every song played while REC is on gets recorded. Click <b>● REC ON</b> again to turn recording off.</p>
-<p>The recording is put together by the app: the <b>mic</b> from the mixer plus a <b>clean copy of the music</b> (in the key you picked).</p>
-<p><b>Voice too quiet or too loud in the recording?</b> Click <b>🎚 Rec Mix</b> next to REC. Move <b>🎤 Mic</b> up to make the voice louder, or <b>🎵 Music</b> down to make the music quieter. These only change the recording; the room sounds the same. The app remembers your settings. <b>Reset to normal</b> puts them back.</p>
-<p>If the voice sounds a little ahead of or behind the music in recordings, move <b>⏱ Timing</b> a small step and try again.</p>
-<p>Recordings are saved in <b>Documents › Karaoke Recordings</b>, named with the song and the date.</p></section>
-
-<section id="g-recordings"><h4>Listening to recordings</h4>
-<p>Click the <b>Recordings</b> tab. At the top, pick <b>Not in a project yet</b> to see new recordings (newest first), or pick a project to see its songs in CD order.</p>
-<ul>
-<li><b>▶</b> plays it; <b>■</b> stops it.</li>
-<li><b>✏️</b> renames it (for example, change "How Great Thou Art - 2026-11-25 7.42pm" to "How Great Thou Art").</li>
-<li><b>📁</b> puts it in a project (a CD), or takes it back out.</li>
-<li><b>📂</b> shows the file in its folder, for copying or sending it to family.</li>
-<li><b>🗑</b> deletes it. It goes to the Recycle Bin, so it can still be brought back.</li>
-<li><b>Open Folder</b> opens the folder for what's shown.</li>
-</ul></section>
-
-<section id="g-projects"><h4>Projects and CDs</h4>
-<p>A <b>project</b> is a group of recordings that will become a CD, like <i>Gospel CD</i>. Its songs are numbered in the order they'll play on the CD.</p>
-<ol>
-<li>Open the <b>Recordings</b> tab and click <b>+ New Project</b>. Type a name, like <i>Gospel CD</i>.</li>
-<li>Next to <b>New recordings go to:</b>, pick that project. Every song you record now goes straight into it as the next track.</li>
-<li>Recordings made before can be moved in: pick <b>Not in a project yet</b> at the top, then click <b>📁</b> next to a recording and pick the project.</li>
-<li>In a project, <b>▲ ▼</b> change the track order, <b>✏️ Rename</b> changes a track's name, and <b>🗑</b> removes a track (to the Recycle Bin).</li>
-<li>The line under the buttons shows how long the CD will be. One CD holds up to <b>80 minutes</b>.</li>
-<li>When it's ready, click <b>💿 Burn CD</b>. The app checks the USB burner and asks for a blank <b>CD-R</b>. Put one in, wait a few seconds, and when it says <b>Ready</b>, click <b>Burn CD</b>. A bar shows each track being written. Don't unplug the burner or close the app until it says <b>Done</b>; the CD pops out by itself when it's finished.</li>
-<li>The CD plays in any CD player, car or home. Use <b>CD-R</b> discs (CD-RW discs don't play in many car stereos). A DVD won't work as a music CD.</li>
-</ol>
-<p>Each project is a normal folder inside <b>Documents › Karaoke Recordings</b>, so the songs can also be copied to a USB stick or sent to family.</p></section>
 
 <section id="g-songs"><h4>Song folders and the drive</h4>
 <p>Click <b>📁 Song Folders</b> at the top.</p>
@@ -242,40 +161,110 @@
 <li><b>Check for New Songs</b> looks for songs that were just copied on. The app also does this by itself every time it opens.</li>
 <li><b>Remove</b> takes a folder out of the list. It does <b>not</b> delete any songs.</li>
 <li>🟢 means connected. ⚪ means that drive isn't plugged in.</li>
+<li><b>File names look like:</b> if many song names show backwards (the singer where the title should be), switch this.</li>
 </ul>
-<p>If the drive isn't plugged in, a red <b>⚠ Not plugged in</b> note shows at the top and those songs are marked. Plug it in and they come back within a few seconds. It doesn't matter which USB port you use.</p>
-<p>Songs that play: <b>MP3+G zip</b> files, <b>MP3 with a matching CDG</b> file, and <b>MP4</b> videos. Old <b>AVI</b> or <b>MPG</b> videos won't play.</p></section>
+<p>If the drive isn't plugged in, a red <b>⚠ Not plugged in</b> note shows at the top and those songs show in red. Plug it in and they come back within about 15 seconds. Any USB port works.</p>
+<p>The song list includes <b>MP3+G zip</b> files, <b>MP3s with a matching CDG</b> file, <b>MP4</b> videos, and plain <b>MP3s</b> (marked "Audio only": music but no words on the TV). Old <b>AVI</b>, <b>MPG</b> and <b>WMA</b> files aren't listed because they can't play.</p></section>
 
 <section id="g-search"><h4>Finding songs</h4>
 <ul>
-<li>Type any part of the song name, the singer, or the disc number (like <i>SC8123</i>). More words narrow it down.</li>
+<li>Type any part of the song name, the singer, or the disc number (like <i>SC8123</i>) in the search box on the left. More words narrow it down, for example <i>patsy crazy</i>.</li>
 <li><b>Sort: Artist / Title</b> changes the order of the list.</li>
-<li><b>Double-click</b> a song to add it to the Playlist.</li>
-<li>If song names show backwards (singer where the title should be), open <b>📁 Song Folders</b> and change <b>File names look like</b>.</li>
+<li><b>Add</b> (or double-clicking the song) puts it on <b>Tonight's Playlist</b> on the right. <b>📋+</b> adds it to a saved playlist instead (see Saved playlists).</li>
 </ul></section>
 
-<section id="g-text"><h4>Bigger text</h4>
-<p>Hold <b>Ctrl</b> and press <b>+</b> to make everything bigger, <b>Ctrl</b> and <b>−</b> to make it smaller, and <b>Ctrl</b> and <b>0</b> to go back to normal. Or press <b>Alt</b> and use the <b>View</b> menu.</p></section>
+<section id="g-sing"><h4>Singing a song</h4>
+<p><b>Tonight's Playlist</b> (on the right) is the list for the show. Click <b>▶</b> next to a song on it to start that song. The words show on the TV.</p>
+<p>The buttons at the bottom:</p>
+<ul>
+<li><b>▶ / ❚❚</b> play or pause.</li>
+<li><b>■</b> stops the song.</li>
+<li><b>⏭</b> plays the next song on Tonight's Playlist.</li>
+<li>Click anywhere on the <b>long bar</b> to jump to that part of the song.</li>
+<li>The <b>🔊 slider</b> is the volume.</li>
+<li><b>Auto-play next song</b>: when checked, the next song starts by itself when one finishes.</li>
+</ul>
+<p>On Tonight's Playlist, <b>▲ ▼</b> move a song up or down, and <b>✕</b> takes it off. Songs that have been sung get a ✓ and a line through them. <b>Clear Sung</b> removes those, and <b>Clear All</b> empties the list. The list is kept even when the computer is turned off.</p></section>
+
+<section id="g-key"><h4>Changing the key</h4>
+<p>While a song is playing, press <b>♯ +</b> to raise it or <b>♭ −</b> to lower it, one step at a time (up to 6 each way). The speed stays the same.</p>
+<p>The key is remembered for that song, shown as <b>Key +2</b> and so on (<b>0</b> is the original key), and it's kept when the list is saved as a playlist.</p>
+<p>A few video songs can't change key; the buttons are greyed out for those.</p></section>
+
+<section id="g-playlists"><h4>Saved playlists</h4>
+<p>A saved playlist is a list of songs to use again, like <i>Elvis</i>, <i>E Gospel</i> or <i>Merle Hag</i>. Click the <b>Playlists</b> tab (next to Song Library).</p>
+<ul>
+<li><b>Add all to tonight</b> puts the whole list on Tonight's Playlist, ready to sing.</li>
+<li><b>Open</b> shows its songs. In there, <b>Add</b> puts one song on Tonight's Playlist, <b>▲ ▼</b> move songs, <b>✕</b> takes a song off the saved list, and <b>Rename</b> changes the list's name. <b>‹ All Playlists</b> goes back.</li>
+<li>To make a new one: put songs on Tonight's Playlist and click <b>💾 Save as Playlist</b>, or click <b>+ New Playlist</b> and add songs with <b>📋+</b> in the Song Library.</li>
+<li><b>🗑</b> deletes a saved playlist. The songs themselves are not deleted.</li>
+<li><b>Import from Show Presenter Pro</b> (shown only when Show Presenter is on the computer) brings in its lists, named the same way they were there.</li>
+</ul></section>
+
+<section id="g-tv"><h4>The TV screen</h4>
+<p>If the TV is connected when the app opens, the words show on it automatically, full screen.</p>
+<ul>
+<li>If the TV screen isn't showing, click <b>📺 TV Screen</b> at the top.</li>
+<li><b>Double-click</b> the TV picture to switch full screen on or off.</li>
+<li>Between songs, the TV shows the next song.</li>
+<li>If the TV cable comes out, the TV screen closes so it doesn't cover the controls. Plug it back in and it comes back by itself.</li>
+</ul></section>
+
+<section id="g-record"><h4>Recording</h4>
+<ol>
+<li>Check that the little bar next to <b>Record from:</b> moves when someone talks into the mic.</li>
+<li>Click <b>● REC</b> so it turns red and says <b>REC ON</b>.</li>
+<li>Play a song. It records from start to finish, with <b>● REC</b> and a timer next to the song name.</li>
+</ol>
+<p>The recording saves itself when the song ends, is stopped, or the next one starts. Every song played while REC is on gets recorded; click <b>● REC ON</b> again to stop recording. If the app is closed during a recording, it saves the recording first.</p>
+<p>The app builds the recording from the <b>mic</b> (from the mixer) plus a <b>clean copy of the music</b>, in the key that was picked.</p>
+<p><b>Voice too quiet or too loud?</b> Click <b>🎚 Rec Mix</b> next to REC. Move <b>🎤 Mic</b> up to make the voice louder, or <b>🎵 Music</b> down to make the music quieter. These only change the recording, not what the room hears, and they're remembered. <b>Reset to normal</b> puts them back. If the voice sounds a little ahead of or behind the music, move <b>⏱ Timing</b> a small step and try again.</p>
+<p>New recordings go into <b>Documents › Karaoke Recordings</b>, named with the song and the date, unless a project is picked next to <b>New recordings go to:</b> (see Projects and CDs).</p></section>
+
+<section id="g-recordings"><h4>Listening to recordings</h4>
+<p>Click the <b>Recordings</b> tab. At the top, <b>Project:</b> shows either <b>Not in a project yet</b> (loose recordings, newest first) or a project's songs in CD order.</p>
+<ul>
+<li><b>▶</b> plays it; <b>■</b> stops it.</li>
+<li><b>✏️</b> renames it, for example from "How Great Thou Art - 2026-11-25 7.42pm" to "How Great Thou Art".</li>
+<li><b>💿</b> moves it into a project (a CD), or back out.</li>
+<li><b>📂</b> shows the file in its folder, for copying or sending it to family.</li>
+<li><b>🗑</b> deletes it. It goes to the Recycle Bin, so it can be brought back.</li>
+<li><b>Open Folder</b> (top right) opens the folder for what's shown.</li>
+</ul></section>
+
+<section id="g-projects"><h4>Projects and CDs</h4>
+<p>A <b>project</b> is a group of recordings that will become a CD, like <i>Gospel CD</i>. Its songs are numbered in the order they'll play on the CD.</p>
+<ol>
+<li>In the <b>Recordings</b> tab, click <b>+ New Project</b> and type a name.</li>
+<li>Next to <b>New recordings go to:</b>, pick that project. Every song recorded from then on goes straight into it as the next track, named by the song's title.</li>
+<li>To add recordings made earlier, pick <b>Not in a project yet</b>, click <b>💿</b> next to a recording, and pick the project.</li>
+<li>With the project picked, <b>▲ ▼</b> change the track order. The line under the buttons shows how long the CD will be; one CD holds up to <b>80 minutes</b>.</li>
+<li>When it's ready, click <b>💿 Burn CD</b>. The app looks for the USB burner and asks for a blank <b>CD-R</b>. Put one in, and when it says <b>Ready to burn</b>, click <b>Burn CD</b>. A bar shows each song being written. Don't unplug the burner or close the app until it says <b>Done</b>; the CD pops out by itself.</li>
+</ol>
+<p>Use <b>CD-R</b> discs: CD-RW discs don't play in many car stereos, and a DVD won't work as a music CD. The finished CD plays in any CD player, car or home.</p>
+<p><b>Rename</b> and <b>🗑</b> next to the project name rename or delete the whole project. Each project is a normal folder inside <b>Documents › Karaoke Recordings</b>, so its songs can also be copied to a USB stick or sent to family.</p></section>
 
 <section id="g-problems"><h4>If something goes wrong</h4>
-<p><b>Click ⚠ Report a Problem</b> at the top. Type what happened if you can (it's okay to leave it blank) and click <b>Send Report</b>. It goes to Camby with the details needed to fix it. If the button turns <b>red</b>, the app noticed a problem by itself; please send a report.</p>
-<p><b>No sound:</b> check <b>Sound to:</b> is set to the mixer, the mixer is on, and its USB cable is plugged in. The volume slider at the bottom should be turned up.</p>
+<p>Click <b>⚠ Report a Problem</b> at the top. Type what happened if you can (it's okay to leave it blank) and click <b>Send Report</b>. It goes to Camby with the details needed to fix it. If the button has turned <b>red</b>, the app noticed a problem by itself; please send a report.</p>
+<p><b>No sound:</b> check that <b>Sound to:</b> is set to the mixer, the mixer is on, its USB cable is plugged in, and the 🔊 slider is turned up.</p>
 <p><b>The mixer isn't in the list:</b> plug its USB cable in, wait a few seconds, and look again. If it still isn't there, close the app and open it again.</p>
-<p><b>No words on the TV:</b> click <b>📺 TV Screen</b>. Check the TV is on and set to the right input.</p>
+<p><b>No words on the TV:</b> click <b>📺 TV Screen</b>, and check that the TV is on and set to the right input.</p>
 <p><b>A song won't play:</b> a message says why. Try another version of the song if there is one, and send a report.</p>
-<p><b>The app closed or froze:</b> open it again. The Playlist is saved. If it asks to send a report, click <b>Send report</b>.</p>
-<p>When the app closes during a recording, it saves the recording first. That can take a few seconds.</p></section>
+<p><b>The app closed or froze:</b> open it again; Tonight's Playlist is kept. If it asks to send a report, click <b>Send report</b>.</p></section>
 
 <section id="g-updates"><h4>Updates</h4>
-<p>The app updates itself. New versions download in the background. A <b>yellow bar</b> at the top says when one is ready, and it installs the next time the app is closed, so it never interrupts a song. Click <b>Restart and update now</b> to install it right away.</p></section>
+<p>The app updates itself. New versions download in the background, and a <b>yellow bar</b> at the top says when one is ready. It installs the next time the app is closed, so it never interrupts a song. <b>Restart and update now</b> installs it right away.</p></section>
 
-<section id="g-keys"><h4>Keyboard shortcuts</h4>
+<section id="g-keys"><h4>Bigger text and shortcuts</h4>
 <table class="keys">
+<tr><td><b>Ctrl</b> and <b>+</b></td><td>Make everything bigger</td></tr>
+<tr><td><b>Ctrl</b> and <b>−</b></td><td>Make everything smaller</td></tr>
+<tr><td><b>Ctrl</b> and <b>0</b></td><td>Back to normal size</td></tr>
 <tr><td><b>Space</b></td><td>Play / pause</td></tr>
 <tr><td><b>F1</b></td><td>Open this guide</td></tr>
 <tr><td><b>Esc</b></td><td>Close a box like this one</td></tr>
-<tr><td><b>Ctrl +</b> / <b>Ctrl −</b> / <b>Ctrl 0</b></td><td>Bigger / smaller / normal text</td></tr>
-</table></section>
+</table>
+<p>Text size is also in the <b>View</b> menu (press <b>Alt</b> to show it).</p></section>
 
     </div>
   </div>
